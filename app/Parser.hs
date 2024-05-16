@@ -25,29 +25,3 @@ typeIdentifierP =
         <$> upperChar
         <*> many (alphaNumChar <|> char '_' <|> char '\'')
         <* P.U.sc
-
-typeP :: Parser P.T.Type
-typeP =
-    (P.T.TypeInt <$ P.U.symbol "Int")
-        <|> (P.T.TypeChar <$ P.U.symbol "Char")
-
-adtP :: Parser P.T.ADT
-adtP = L.nonIndented P.U.scn $ do
-    _ <- P.U.symbol "type"
-    name <- typeIdentifierP
-    body <- optional $ do
-        _ <- P.U.symbol "="
-        v <- adtVariantP
-        vs <- many (P.U.symbol "|" *> adtVariantP)
-        return $ v : vs
-    return $ P.T.ADT name $ fromMaybe [] body
-
-adtVariantP :: Parser P.T.ADTVariant
-adtVariantP =
-    ( \ti ts ->
-        if null ts
-            then P.T.ADTUnit ti
-            else P.T.ADTComplex ti ts
-    )
-        <$> typeIdentifierP
-        <*> many typeP

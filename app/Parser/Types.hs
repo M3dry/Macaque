@@ -12,7 +12,7 @@ newtype TypeIdentifier = TypeIdentifier Text
 
 data Type
     = TypeArrow Type Type
-    | TypeTuple Type
+    | TypeTuple [Type]
     | TypeSimple TypeIdentifier
     | TypeInt
     | TypeChar

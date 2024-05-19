@@ -1,6 +1,6 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 
-module Parser.Types (Identifier (..), TypeIdentifier (..), Type (..), ADT (..), ADTVariant (..), Function (..)) where
+module Parser.Types (Identifier (..), TypeIdentifier (..), Type (..), ADT (..), ADTConstructor (..), Function (..)) where
 
 import Data.Text (Text)
 
@@ -20,13 +20,11 @@ data Type
 
 data ADT = ADT
     { name :: TypeIdentifier
-    , body :: [ADTVariant]
+    , constructors :: [ADTConstructor]
     }
     deriving (Show)
 
-data ADTVariant
-    = ADTUnit TypeIdentifier
-    | ADTComplex TypeIdentifier [Type]
+data ADTConstructor = ADTNormal TypeIdentifier [Type]
     deriving (Show)
 
 data Function = Function

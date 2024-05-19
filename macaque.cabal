@@ -44,8 +44,9 @@ executable macaque
         , Parser
         , Parser.Types
         , Parser.Util
+        , IndentationNotWorking
     build-depends:
-        , base ^>=4.19.1.0
+        , base
         , text
         , megaparsec
         , parser-combinators

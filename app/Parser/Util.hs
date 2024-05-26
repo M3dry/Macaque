@@ -1,25 +1,21 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Parser.Util (Parser, whiteSpace, whiteSpace', lexeme, lexeme', withLineFold, withLineFold', withIndent, inParens, testParser, testParser') where
+module Parser.Util (Parser, whiteSpace, whiteSpace', lexeme, lexeme', checkIndent, withLineFold, testParser, testParser') where
 
 import Control.Applicative hiding (some)
-import Control.Applicative.Combinators (some, between)
-import Control.Monad.State (StateT (runStateT), get, put)
+import Control.Monad.State (StateT (runStateT), get, put, evalStateT)
 import Data.Functor (void)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Void (Void)
-import Debug.Trace (traceShowId)
-import Text.Megaparsec (MonadParsec (eof, hidden), Parsec, PosState (PosState), SourcePos (SourcePos, sourceColumn), State (State, stateInput, statePosState), errorBundlePretty, getParserState, getSourcePos, mkPos, pstateSourcePos, runParser', setParserState, skipSome, stateOffset, (<?>), unPos)
-import Text.Megaparsec.Char (char, newline, space1, string)
+import Text.Megaparsec (MonadParsec (eof), Parsec, PosState (PosState), SourcePos (SourcePos), State (State, stateInput), errorBundlePretty, mkPos, runParser', skipSome, (<?>), pos1)
+import Text.Megaparsec.Char (char)
 import Text.Megaparsec.Char.Lexer qualified as L
-import Text.Megaparsec.Stream (reachOffsetNoLine)
 import Text.Megaparsec.Pos (Pos)
+import Data.Text.IO qualified as TIO
+import Text.Megaparsec.State (initialState)
 
-type Parser' c = StateT c (Parsec Void Text)
-
--- Int denotes the mininum indentation level in spaces that is allowed
-type Parser = Parser' Pos
+type Parser = StateT (Maybe Pos, Bool) (Parsec Void Text)
 
 lineComment :: Parser ()
 lineComment = L.skipLineComment "--"
@@ -27,16 +23,30 @@ lineComment = L.skipLineComment "--"
 blockComment :: Parser ()
 blockComment = L.skipBlockComment "{-" "-}"
 
+whiteSpace :: Parser ()
+whiteSpace = do
+    (_, sameLine) <- get
+    let wsChars = if sameLine then whiteSpaceCharsSameLine else whiteSpaceChars
+    L.space
+        (skipSome wsChars)
+        lineComment
+        blockComment
+
 whiteSpaceChars :: Parser ()
 whiteSpaceChars = void (char ' ' <|> char '\n') <?> "whitespace"
 
-whiteSpace :: Parser ()
-whiteSpace = L.space (skipSome whiteSpaceChars) (L.skipLineComment "--") (L.skipBlockCommentNested "{-" "-}")
+whiteSpaceCharsSameLine :: Parser ()
+whiteSpaceCharsSameLine = void (char ' ') <?> "whitespace"
 
 whiteSpace' :: Parser ()
 whiteSpace' = do
-    minIndent <- get
-    void $ L.indentGuard whiteSpace GT minIndent
+    (minimalIndent, _) <- get
+    void
+        ( case minimalIndent of
+            Just minimalIndent' -> L.indentGuard whiteSpace GT minimalIndent'
+            Nothing -> L.indentGuard whiteSpace EQ pos1
+        )
+        <|> eof
 
 lexeme :: Parser a -> Parser a
 lexeme = L.lexeme whiteSpace
@@ -44,39 +54,35 @@ lexeme = L.lexeme whiteSpace
 lexeme' :: Parser a -> Parser a
 lexeme' = L.lexeme whiteSpace'
 
-withLineFold :: Parser a -> Parser a
-withLineFold p = L.indentLevel >>= flip withLineFold' p
+checkIndent :: Parser ()
+checkIndent = do
+    (minimalIndent, _) <- get
+    _ <- case minimalIndent of
+        Just minimalIndent' -> L.indentGuard (return ()) GT minimalIndent'
+        Nothing -> L.indentGuard (return ()) EQ pos1
+    return ()
 
-withLineFold' :: Pos -> Parser a -> Parser a
-withLineFold' pos p = do
+withLineFold :: Parser a -> Parser a
+withLineFold p = do
     whiteSpace
-    minIndent <- get
-    put pos
+    (minimalIndent, sameLine) <- get
+    currIndent <- L.indentLevel
+    put (Just currIndent, sameLine)
     a <- p
-    put minIndent
+    put (minimalIndent, sameLine)
     return a
 
-withIndent :: Pos -> Parser a -> Parser a
-withIndent indent p = L.indentGuard whiteSpace EQ indent *> p
+testParser :: (Show a) => Parser a -> IO ()
+testParser p = testParser' p (Nothing, False)
 
-inParens :: Parser a -> Parser a
-inParens = between (lexeme' $ char '(') (char ')') . lexeme'
-
--- reserved :: [Text]
--- reserved = ["let", "in", "where", "if", "then", "else", "case", "of"]
-
-testParser :: (Show a) => Parser a -> String -> IO ()
-testParser p = testParser' p 1
-
-testParser' :: (Show a) => Parser a -> Int -> String -> IO ()
-testParser' p level i = do
-    let i' = T.pack i
-    let state = State i' 0 (PosState i' 1 (SourcePos "" (mkPos 1) (mkPos 1)) (mkPos 4) "") []
-    let p' = runStateT p (mkPos level)
-    let (state', parsed) = runParser' p' state
-    putStrLn "Parsed:"
-    case parsed of
-        Right ok -> print ok
-        Left err -> putStr $ errorBundlePretty err
-    putStrLn "\nParsec State"
-    print $ stateInput state'
+testParser' :: (Show a) => Parser a -> (Maybe Pos, Bool) -> IO ()
+testParser' p stateP = do
+    let evalP = evalStateT p stateP
+    input <- TIO.readFile "parser-tests/scratchpad"
+    let (state, res) = runParser' evalP $ initialState "scratchpad" input
+    putStrLn "Rest of the Input:"
+    print $ stateInput state
+    putStrLn "\nResult:"
+    case res of
+        Right a -> print a
+        Left err -> putStrLn $ errorBundlePretty err

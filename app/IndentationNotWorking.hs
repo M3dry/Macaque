@@ -3,13 +3,14 @@
 module IndentationNotWorking where
 
 import Control.Applicative
+import Control.Applicative.Combinators (someTill)
 import Control.Monad (void)
 import Control.Monad.State (MonadState (get, put), StateT, evalStateT)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Void (Void)
-import Text.Megaparsec (MonadParsec (eof), Parsec, Pos, chunk, pos1, skipSome, (<?>), runParser', State (stateInput), errorBundlePretty, mkPos)
-import Text.Megaparsec.Char (alphaNumChar, char)
+import Text.Megaparsec (MonadParsec (eof), Parsec, Pos, State (stateInput), chunk, errorBundlePretty, mkPos, pos1, runParser', skipSome, (<?>))
+import Text.Megaparsec.Char (alphaNumChar, char, upperChar)
 import Text.Megaparsec.Char.Lexer qualified as L
 import Text.Megaparsec.State (initialState)
 
@@ -67,16 +68,16 @@ withLineFold p = do
 wordP :: Parser Text
 wordP = T.pack <$> lexeme (some alphaNumChar)
 
-assignP :: Parser (Text, Text)
+assignP :: Parser (Text, Type)
 assignP = L.nonIndented whiteSpace . withLineFold $ do
     name <- wordP
     checkIndent
     value <- do
         _ <- lexemeWithIndent (chunk "=")
-        wordP
+        typeP
     return (name, value)
 
-assignsP :: Parser [(Text, Text)]
+assignsP :: Parser [(Text, Type)]
 assignsP = some assignP
 
 senteceIndented :: Pos -> Parser [Text]
@@ -88,9 +89,35 @@ senteceIndented pos = do
     whiteSpace
     return words'
 
+data Type
+    = Simple Text
+    | Tuple [Type]
+    deriving (Show)
+
+typeIdentifierP :: Parser Text
+typeIdentifierP =
+    lexeme
+        ( (\c cs -> T.pack (c : cs))
+            <$> (char '_' <|> upperChar)
+            <*> many (alphaNumChar <|> char '_' <|> char '\'')
+        )
+
+typeP :: Parser Type
+typeP =
+    (Simple <$> typeIdentifierP)
+        <|> ( checkIndent
+                >> withLineFold
+                    ( do
+                        _ <- lexemeWithIndent (char '(')
+                        t <- typeP
+                        ts <- someTill (checkIndent >> lexemeWithIndent (char ',') *> typeP <* checkIndent) (void $ lexeme (char ')'))
+                        return $ Tuple (t : ts)
+                    )
+            )
+
 run :: IO ()
 run = do
-    let assignsP' = evalStateT ((,) <$> (whiteSpaceWithIndent *> assignsP) <*> senteceIndented (mkPos 4)) (Nothing, False)
+    let assignsP' = evalStateT (typeP) (Nothing, False)
     input <- readFile "parser-tests/indentation-not-working"
     let (state, res) = runParser' assignsP' $ initialState "indentation-not-working" $ T.pack input
     putStrLn "Rest of the Input:"
@@ -98,4 +125,4 @@ run = do
     putStrLn "\nResult:"
     case res of
         Right a -> print a
-        Left err -> print $ errorBundlePretty err
+        Left err -> putStrLn $ errorBundlePretty err

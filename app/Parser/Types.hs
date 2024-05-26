@@ -14,8 +14,6 @@ data Type
     = TypeArrow Type Type
     | TypeTuple [Type]
     | TypeSimple TypeIdentifier
-    | TypeInt
-    | TypeChar
     deriving (Show)
 
 data ADT = ADT

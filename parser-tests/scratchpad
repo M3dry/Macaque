@@ -1,1 +1,1 @@
-(Int, Char, String)
+expr let x = fI in hi x

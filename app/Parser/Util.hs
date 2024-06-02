@@ -1,18 +1,18 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Parser.Util (Parser, whiteSpace, whiteSpace', lexeme, lexeme', checkIndent, withLineFold, testParser, testParser') where
+module Parser.Util (Parser, whiteSpace, whiteSpace', lexeme, lexeme', keyword, keyword', checkIndent, withLineFold, testParser, run, run') where
 
 import Control.Applicative hiding (some)
-import Control.Monad.State (StateT (runStateT), get, put, evalStateT)
+import Control.Monad.State (StateT (runStateT), evalStateT, get, put)
 import Data.Functor (void)
 import Data.Text (Text)
 import Data.Text qualified as T
+import Data.Text.IO qualified as TIO
 import Data.Void (Void)
-import Text.Megaparsec (MonadParsec (eof), Parsec, PosState (PosState), SourcePos (SourcePos), State (State, stateInput), errorBundlePretty, mkPos, runParser', skipSome, (<?>), pos1)
+import Text.Megaparsec (MonadParsec (eof, lookAhead), Parsec, PosState (PosState), SourcePos (SourcePos), State (State, stateInput), errorBundlePretty, mkPos, pos1, runParser', skipSome, (<?>), chunk)
 import Text.Megaparsec.Char (char)
 import Text.Megaparsec.Char.Lexer qualified as L
 import Text.Megaparsec.Pos (Pos)
-import Data.Text.IO qualified as TIO
 import Text.Megaparsec.State (initialState)
 
 type Parser = StateT (Maybe Pos, Bool) (Parsec Void Text)
@@ -54,6 +54,12 @@ lexeme = L.lexeme whiteSpace
 lexeme' :: Parser a -> Parser a
 lexeme' = L.lexeme whiteSpace'
 
+keyword :: Text -> Parser ()
+keyword k = lexeme (chunk k *> lookAhead whiteSpaceChars)
+
+keyword' :: Text -> Parser ()
+keyword' k = lexeme' (chunk k *> lookAhead whiteSpaceChars)
+
 checkIndent :: Parser ()
 checkIndent = do
     (minimalIndent, _) <- get
@@ -64,7 +70,6 @@ checkIndent = do
 
 withLineFold :: Parser a -> Parser a
 withLineFold p = do
-    whiteSpace
     (minimalIndent, sameLine) <- get
     currIndent <- L.indentLevel
     put (Just currIndent, sameLine)
@@ -73,12 +78,15 @@ withLineFold p = do
     return a
 
 testParser :: (Show a) => Parser a -> IO ()
-testParser p = testParser' p (Nothing, False)
+testParser p = run p "scratchpad"
 
-testParser' :: (Show a) => Parser a -> (Maybe Pos, Bool) -> IO ()
-testParser' p stateP = do
+run :: Show a => Parser a -> FilePath -> IO ()
+run p file = run' p (Nothing, False) $ "parser-tests/" ++ file
+
+run' :: (Show a) => Parser a -> (Maybe Pos, Bool) -> FilePath -> IO ()
+run' p stateP file = do
     let evalP = evalStateT p stateP
-    input <- TIO.readFile "parser-tests/scratchpad"
+    input <- TIO.readFile file
     let (state, res) = runParser' evalP $ initialState "scratchpad" input
     putStrLn "Rest of the Input:"
     print $ stateInput state

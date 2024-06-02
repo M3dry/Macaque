@@ -1,6 +1,18 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 
-module Parser.Types (Identifier (..), TypeIdentifier (..), Type (..), ADT (..), ADTConstructor (..), Function (..)) where
+module Parser.Types (
+    Identifier (..),
+    TypeIdentifier (..),
+    Type (..),
+    ADT (..),
+    ADTConstructor (..),
+    Pattern (..),
+    Expression (..),
+    FunctionSignature (..),
+    FunctionVariants (..),
+    FunctionVariant (..),
+)
+where
 
 import Data.Text (Text)
 
@@ -25,8 +37,34 @@ data ADT = ADT
 data ADTConstructor = ADTNormal TypeIdentifier [Type]
     deriving (Show)
 
-data Function = Function
+data Pattern
+    = PatVariable Identifier
+    | PatConstructor TypeIdentifier [Pattern]
+    | PatCapture Identifier Pattern
+    deriving (Show)
+
+data Expression
+    = ExprVar Identifier
+    | ExprTypeConstructor TypeIdentifier
+    | ExprApplied Expression Expression
+    | ExprTyped Expression Type
+    | ExprLet Identifier Expression Expression
+    | ExprIfElse Expression Expression Expression
+    | ExprCase Expression [(Pattern, Expression)]
+    deriving (Show)
+
+data FunctionSignature = FunctionSignature
     { name :: Identifier
     , signature :: Type
     }
     deriving (Show)
+
+data FunctionVariants = FunctionVariants
+    { name :: Identifier
+    , variants :: [FunctionVariant]
+    }
+
+data FunctionVariant = FunctionVariant
+    { patterns :: [Pattern]
+    , expression :: Expression
+    }

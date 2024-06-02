@@ -1,3 +1,7 @@
--- data Void
-data Point = Point Int Int
--- data OptionInt = Just Int | Nothing
+data Void
+data Point
+ = Point Int Int
+data
+ OptionInt
+  = Just Int
+    | Nothing

@@ -1,4 +1,7 @@
+{-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module Parser where
@@ -9,18 +12,19 @@ import Control.Monad (void)
 import Data.Text qualified as T
 import Parser.Types qualified as P.T
 import Parser.Util
-import Text.Megaparsec (MonadParsec (try), chunk)
-import Text.Megaparsec.Char (alphaNumChar, char, lowerChar, upperChar)
+import Text.Megaparsec (MonadParsec (notFollowedBy, try), chunk, manyTill)
+import Text.Megaparsec.Char (alphaNumChar, char, digitChar, lowerChar, upperChar)
 import Text.Megaparsec.Char.Lexer qualified as L
-import Text.Megaparsec.Debug (MonadParsecDbg(dbg))
+import Type.Reflection (Typeable, eqTypeRep, typeRep, (:~~:) (HRefl))
 
 identifierP :: Parser P.T.Identifier
 identifierP =
-    lexeme
-        ( (\c cs -> P.T.Identifier $ T.pack (c : cs))
-            <$> (char '_' <|> lowerChar)
-            <*> many (alphaNumChar <|> char '_' <|> char '\'')
-        )
+    notFollowedBy reservedKeywords
+        *> lexeme
+            ( (\c cs -> P.T.Identifier $ T.pack (c : cs))
+                <$> (char '_' <|> lowerChar)
+                <*> many (alphaNumChar <|> char '_' <|> char '\'')
+            )
 
 typeIdentifierP :: Parser P.T.TypeIdentifier
 typeIdentifierP =
@@ -32,7 +36,7 @@ typeIdentifierP =
 
 adtP :: Parser P.T.ADT
 adtP = L.nonIndented whiteSpace . withLineFold $ do
-    _ <- lexeme' (chunk "data")
+    keyword' "data"
     name <- lexeme typeIdentifierP
     constructors <-
         ( do
@@ -87,45 +91,74 @@ typeP inParens =
                 (lexeme (char ')'))
                 (typeP True)
 
-patternP :: Parser P.T.Pattern
-patternP =
-    ( ( \i mp -> case mp of
-            Just p -> P.T.PatCapture i p
-            Nothing -> P.T.PatVariable i
-      )
-        <$> identifierP
-        <*> optional
-            ( do
-                checkIndent
-                _ <- lexeme' (char '@')
-                patternP
+literalP :: Parser P.T.Literal
+literalP =
+    ( ( \ms ->
+            ( case ms of
+                Just '-' -> P.T.LitNumber False
+                _ -> P.T.LitNumber True
             )
+                . T.pack
+      )
+        <$> optional (char '-' <|> char '+')
+        <*> some digitChar
     )
-        <|> ( do
-                ti <- typeIdentifierP
-                pats <- many (checkIndent *> patternP)
-                return $ P.T.PatConstructor ti pats
+        <|> ( P.T.LitChar
+                <$> (char '\'' *> L.charLiteral <* char '\'')
+            )
+        <|> ( P.T.LitString . T.pack
+                <$> (char '"' *> manyTill L.charLiteral (char '"'))
             )
 
+patternP :: forall safe. (Typeable safe) => Parser (P.T.Pattern safe)
+patternP = case typeRep @safe `eqTypeRep` typeRep @'False of
+    Just HRefl ->
+        (P.T.PatLiteral <$> literalP)
+            <|> safeP @'False
+    Nothing -> safeP
+  where
+    safeP :: forall safe'. (Typeable safe') => Parser (P.T.Pattern safe')
+    safeP =
+        ( ( \i mp -> case mp of
+                Just p -> P.T.PatCapture i p
+                Nothing -> P.T.PatVariable i
+          )
+            <$> identifierP
+            <*> optional
+                ( do
+                    checkIndent
+                    _ <- lexeme' (char '@')
+                    patternP @safe'
+                )
+        )
+            <|> ( do
+                    ti <- typeIdentifierP
+                    pats <- many (checkIndent *> patternP @safe')
+                    return $ P.T.PatConstructor ti pats
+                )
+            <|> (P.T.PatIgnore <$ lexeme (char '_'))
+            <|> between (lexeme' (char '(')) (lexeme (char ')')) (patternP @safe')
+
+-- NOTE: Testing only
 testExprP :: Parser P.T.Expression
 testExprP = L.nonIndented whiteSpace . withLineFold $ do
     keyword' "expr"
     expressionP
 
 expressionP :: Parser P.T.Expression
-expressionP = dbg "typed" typed
+expressionP = typed >>= application
   where
     application :: P.T.Expression -> Parser P.T.Expression
-    application expr = dbg "application" $ do
-        mExpr <- optional (try typed)
+    application expr = do
+        mExpr <- optional (checkIndent *> try typed)
         case mExpr of
             Just expr2 -> application (P.T.ExprApplied expr expr2)
             Nothing -> pure expr
     typed =
-        ( ( \e tm -> case tm of
-                Just t -> P.T.ExprTyped e t
-                Nothing -> e
-          )
+        ( \e tm -> case tm of
+            Just t -> P.T.ExprTyped e t
+            Nothing -> e
+        )
             <$> expressionP'
             <*> optional
                 ( withLineFold $ do
@@ -133,13 +166,13 @@ expressionP = dbg "typed" typed
                     _ <- lexeme' (chunk "::")
                     typeP True
                 )
-        )
     expressionP' =
         letP
             <|> ifElseP
             <|> caseP
             <|> (P.T.ExprVar <$> identifierP)
             <|> (P.T.ExprTypeConstructor <$> typeIdentifierP)
+            <|> lambdaP
             <|> between (lexeme' (char '(')) (lexeme (char ')')) expressionP
     letP = withLineFold $ do
         keyword' "let"
@@ -150,7 +183,7 @@ expressionP = dbg "typed" typed
             return (n, nExpr)
         checkIndent
         keyword' "in"
-        expr <- dbg "let expr" expressionP
+        expr <- expressionP
         return $ P.T.ExprLet n nExpr expr
     ifElseP = withLineFold $ do
         keyword' "if"
@@ -173,6 +206,11 @@ expressionP = dbg "typed" typed
                     return (pat, branchExpr)
                 )
         return $ P.T.ExprCase expr branches
+    lambdaP = withLineFold $ do
+        _ <- lexeme' (char '\\')
+        pats <- someTill (lexeme' patternP) (lexeme' (chunk "->"))
+        expr <- expressionP
+        return $ P.T.ExprLambda pats expr
 
 functionSignatureP :: Parser P.T.FunctionSignature
 functionSignatureP = L.nonIndented whiteSpace . withLineFold $ do

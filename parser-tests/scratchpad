@@ -1,1 +1,4 @@
-expr let x = fI in hi x
+expr \x (Number y) ->
+      case y of
+       100 -> x
+       y' -> add x y'

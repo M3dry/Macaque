@@ -1,15 +1,16 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Parser.Util (Parser, whiteSpace, whiteSpace', lexeme, lexeme', keyword, keyword', checkIndent, withLineFold, testParser, run, run') where
+module Parser.Util (Parser, whiteSpace, whiteSpace', lexeme, lexeme', keyword, keyword', reserved, reservedKeywords, checkIndent, withLineFold, testParser, run, run') where
 
 import Control.Applicative hiding (some)
+import Control.Applicative.Combinators (choice)
 import Control.Monad.State (StateT (runStateT), evalStateT, get, put)
 import Data.Functor (void)
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.IO qualified as TIO
 import Data.Void (Void)
-import Text.Megaparsec (MonadParsec (eof, lookAhead), Parsec, PosState (PosState), SourcePos (SourcePos), State (State, stateInput), errorBundlePretty, mkPos, pos1, runParser', skipSome, (<?>), chunk)
+import Text.Megaparsec (MonadParsec (eof, lookAhead), Parsec, PosState (PosState), SourcePos (SourcePos), State (State, stateInput), chunk, errorBundlePretty, mkPos, pos1, runParser', skipSome, (<?>))
 import Text.Megaparsec.Char (char)
 import Text.Megaparsec.Char.Lexer qualified as L
 import Text.Megaparsec.Pos (Pos)
@@ -60,6 +61,12 @@ keyword k = lexeme (chunk k *> lookAhead whiteSpaceChars)
 keyword' :: Text -> Parser ()
 keyword' k = lexeme' (chunk k *> lookAhead whiteSpaceChars)
 
+reserved :: [Text]
+reserved = ["data", "let", "in", "if", "then", "else", "case", "of"]
+
+reservedKeywords :: Parser ()
+reservedKeywords = choice $ keyword <$> reserved
+
 checkIndent :: Parser ()
 checkIndent = do
     (minimalIndent, _) <- get
@@ -80,7 +87,7 @@ withLineFold p = do
 testParser :: (Show a) => Parser a -> IO ()
 testParser p = run p "scratchpad"
 
-run :: Show a => Parser a -> FilePath -> IO ()
+run :: (Show a) => Parser a -> FilePath -> IO ()
 run p file = run' p (Nothing, False) $ "parser-tests/" ++ file
 
 run' :: (Show a) => Parser a -> (Maybe Pos, Bool) -> FilePath -> IO ()

@@ -15,6 +15,7 @@ import Text.Megaparsec.Char (char)
 import Text.Megaparsec.Char.Lexer qualified as L
 import Text.Megaparsec.Pos (Pos)
 import Text.Megaparsec.State (initialState)
+import Text.Pretty.Simple (pPrint)
 
 type Parser = StateT (Maybe Pos, Bool) (Parsec Void Text)
 
@@ -99,5 +100,5 @@ run' p stateP file = do
     print $ stateInput state
     putStrLn "\nResult:"
     case res of
-        Right a -> print a
+        Right a -> pPrint a
         Left err -> putStrLn $ errorBundlePretty err

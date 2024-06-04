@@ -110,34 +110,34 @@ literalP =
                 <$> (char '"' *> manyTill L.charLiteral (char '"'))
             )
 
-patternP :: forall safe. (Typeable safe) => Parser (P.T.Pattern safe)
-patternP = case typeRep @safe `eqTypeRep` typeRep @'False of
+patternP :: forall safe. (Typeable safe) => Bool -> Parser (P.T.Pattern safe)
+patternP inParens = case typeRep @safe `eqTypeRep` typeRep @'False of
     Just HRefl ->
         (P.T.PatLiteral <$> literalP)
-            <|> safeP @'False
-    Nothing -> safeP
+            <|> safeP @'False inParens
+    Nothing -> safeP inParens
   where
-    safeP :: forall safe'. (Typeable safe') => Parser (P.T.Pattern safe')
-    safeP =
-        ( ( \i mp -> case mp of
-                Just p -> P.T.PatCapture i p
-                Nothing -> P.T.PatVariable i
-          )
-            <$> identifierP
-            <*> optional
-                ( do
-                    checkIndent
-                    _ <- lexeme' (char '@')
-                    patternP @safe'
+    safeP :: forall safe'. (Typeable safe') => Bool -> Parser (P.T.Pattern safe')
+    safeP inParens' =
+        (P.T.PatIgnore <$ lexeme (char '_'))
+            <|> ( ( \i mp -> case mp of
+                        Just p -> P.T.PatCapture i p
+                        Nothing -> P.T.PatVariable i
                 )
-        )
+                    <$> identifierP
+                    <*> optional
+                        ( do
+                            checkIndent
+                            _ <- lexeme' (char '@')
+                            patternP @safe' inParens'
+                        )
+                )
             <|> ( do
                     ti <- typeIdentifierP
-                    pats <- many (checkIndent *> patternP @safe')
+                    pats <- if inParens' then many (checkIndent *> patternP @safe' inParens') else pure []
                     return $ P.T.PatConstructor ti pats
                 )
-            <|> (P.T.PatIgnore <$ lexeme (char '_'))
-            <|> between (lexeme' (char '(')) (lexeme (char ')')) (patternP @safe')
+            <|> between (lexeme' (char '(')) (lexeme (char ')')) (patternP @safe' True)
 
 -- NOTE: Testing only
 testExprP :: Parser P.T.Expression
@@ -163,7 +163,7 @@ expressionP = typed >>= application
             <*> optional
                 ( withLineFold $ do
                     checkIndent
-                    _ <- lexeme' (chunk "::")
+                    _ <- lexeme' (chunk ":")
                     typeP True
                 )
     expressionP' =
@@ -174,6 +174,7 @@ expressionP = typed >>= application
             <|> (P.T.ExprTypeConstructor <$> typeIdentifierP)
             <|> lambdaP
             <|> between (lexeme' (char '(')) (lexeme (char ')')) expressionP
+            <|> (P.T.ExprLiteral <$> literalP)
     letP = withLineFold $ do
         keyword' "let"
         (n, nExpr) <- withLineFold $ do
@@ -200,7 +201,7 @@ expressionP = typed >>= application
         branches <-
             some
                 ( withLineFold $ do
-                    pat <- lexeme' patternP
+                    pat <- lexeme' (patternP True)
                     _ <- lexeme' (chunk "->")
                     branchExpr <- expressionP
                     return (pat, branchExpr)
@@ -208,7 +209,7 @@ expressionP = typed >>= application
         return $ P.T.ExprCase expr branches
     lambdaP = withLineFold $ do
         _ <- lexeme' (char '\\')
-        pats <- someTill (lexeme' patternP) (lexeme' (chunk "->"))
+        pats <- someTill (lexeme' $ patternP False) (lexeme' (chunk "->"))
         expr <- expressionP
         return $ P.T.ExprLambda pats expr
 
@@ -218,3 +219,18 @@ functionSignatureP = L.nonIndented whiteSpace . withLineFold $ do
     _ <- lexeme' (char ':')
     t <- typeP True
     return $ P.T.FunctionSignature{name = name, signature = t}
+
+functionVariantP :: Parser P.T.FunctionVariant
+functionVariantP = L.nonIndented whiteSpace . withLineFold $ do
+        name <- lexeme' identifierP
+        pats <- manyTill (lexeme' $ patternP False) (lexeme' $ char '=')
+        expr <- expressionP
+        return $ P.T.FunctionVariant{name=name, patterns=pats, expression=expr}
+
+topLevelP :: Parser P.T.TopLevel
+topLevelP = (P.T.TopLvlADT <$> adtP) <|> try (P.T.TopLvlFunSig <$> functionSignatureP) <|> (P.T.TopLvlFunVariant <$> functionVariantP)
+
+fileP :: Parser P.T.File
+fileP = do
+    topLevelDefs <- many topLevelP
+    return $ P.T.File{topLevelDefinitions=topLevelDefs}

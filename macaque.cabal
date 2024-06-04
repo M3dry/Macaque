@@ -51,5 +51,6 @@ executable macaque
         , megaparsec
         , parser-combinators
         , mtl
+        , pretty-simple
     hs-source-dirs:   app
     default-language: GHC2021

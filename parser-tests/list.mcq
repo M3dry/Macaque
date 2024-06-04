@@ -1,0 +1,16 @@
+data ListInt
+    = Empty
+    | Cons Int ListInt
+
+data MaybeInt
+    = Nothing
+    | Just Int
+
+head : ListInt -> MaybeInt
+head Empty = Nothing
+head (Cons x _) = Just x
+
+last : ListInt -> MaybeInt
+last Empty = Nothing
+last (Cons x Empty) = Just x
+last (Cons _ xs) = last xs

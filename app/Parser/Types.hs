@@ -13,8 +13,9 @@ module Parser.Types (
     Pattern (..),
     Expression (..),
     FunctionSignature (..),
-    FunctionVariants (..),
     FunctionVariant (..),
+    TopLevel (..),
+    File (..),
 )
 where
 
@@ -68,6 +69,7 @@ data Expression
     | ExprIfElse Expression Expression Expression
     | ExprCase Expression [(Pattern 'False, Expression)]
     | ExprLambda [Pattern 'True] Expression
+    | ExprLiteral Literal
     deriving (Show)
 
 data FunctionSignature = FunctionSignature
@@ -76,12 +78,20 @@ data FunctionSignature = FunctionSignature
     }
     deriving (Show)
 
-data FunctionVariants = FunctionVariants
-    { name :: Identifier
-    , variants :: [FunctionVariant]
-    }
-
 data FunctionVariant = FunctionVariant
-    { patterns :: [Pattern 'False]
+    { name :: Identifier
+    , patterns :: [Pattern 'False]
     , expression :: Expression
     }
+    deriving (Show)
+
+data TopLevel
+    = TopLvlADT ADT
+    | TopLvlFunSig FunctionSignature
+    | TopLvlFunVariant FunctionVariant
+    deriving (Show)
+
+data File = File
+    { topLevelDefinitions :: [TopLevel]
+    }
+    deriving (Show)

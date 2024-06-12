@@ -22,15 +22,16 @@ where
 import Data.Text (Text)
 
 newtype Identifier = Identifier Text
-    deriving (Show)
+    deriving (Show, Eq, Ord)
 
 newtype TypeIdentifier = TypeIdentifier Text
-    deriving (Show)
+    deriving (Show, Eq, Ord)
 
 data Type
     = TypeArrow Type Type
     | TypeTuple [Type]
     | TypeSimple TypeIdentifier
+    | TypeHole
     deriving (Show)
 
 data ADT = ADT
@@ -92,6 +93,6 @@ data TopLevel
     deriving (Show)
 
 data File = File
-    { topLevelDefinitions :: [TopLevel]
+    { topLevel :: [TopLevel]
     }
     deriving (Show)

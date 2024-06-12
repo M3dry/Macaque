@@ -44,7 +44,9 @@ executable macaque
         , Parser
         , Parser.Types
         , Parser.Util
-        , IndentationNotWorking
+        , Static
+        , Static.TypeChecker
+        , Static.Types
     build-depends:
         , base
         , text
@@ -52,5 +54,6 @@ executable macaque
         , parser-combinators
         , mtl
         , pretty-simple
+        , containers
     hs-source-dirs:   app
     default-language: GHC2021

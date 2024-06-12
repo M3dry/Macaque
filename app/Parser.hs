@@ -129,7 +129,7 @@ patternP inParens = case typeRep @safe `eqTypeRep` typeRep @'False of
                         ( do
                             checkIndent
                             _ <- lexeme' (char '@')
-                            patternP @safe' inParens'
+                            patternP @safe' False
                         )
                 )
             <|> ( do
@@ -233,4 +233,4 @@ topLevelP = (P.T.TopLvlADT <$> adtP) <|> try (P.T.TopLvlFunSig <$> functionSigna
 fileP :: Parser P.T.File
 fileP = do
     topLevelDefs <- many topLevelP
-    return $ P.T.File{topLevelDefinitions=topLevelDefs}
+    return $ P.T.File{topLevel=topLevelDefs}

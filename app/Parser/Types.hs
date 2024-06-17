@@ -32,7 +32,6 @@ data Type
     | TypeTuple [Type]
     | TypeSimple TypeIdentifier
     | TypeHole
-    | TypeHoleTagged Identifier
     deriving (Show)
 
 data ADT = ADT

@@ -18,23 +18,23 @@ convertConstructors adtName =
     )
     M.empty
 
-createSymbols :: [FunctionSignature] -> [ADT] -> Symbols
-createSymbols sigs adts =
-  Symbols
-    { constructors = convertADTs adts,
-      signatures = foldl (\m FunctionSignature {name, signature} -> M.insert name signature m) M.empty sigs
-    }
+-- createSymbols :: [FunctionSignature] -> [ADT] -> Symbols
+-- createSymbols sigs adts =
+--   Symbols
+--     { constructors = convertADTs adts,
+--       signatures = foldl (\m FunctionSignature {name, signature} -> M.insert name signature m) M.empty sigs
+--     }
 
-typeCheck :: File -> Maybe (Map FunctionKey TypedExpression)
-typeCheck File {topLevel = topLevel} = do
-  let (adts, sigs, variants) =
-        foldl
-          ( \(adts', sigs', variants') tl -> case tl of
-              TopLvlADT adt -> (adt : adts', sigs', variants')
-              TopLvlFunSig sig -> (adts', sig : sigs', variants')
-              TopLvlFunVariant variant -> (adts', sigs', variant : variants')
-          )
-          ([], [], [])
-          topLevel
-  let symbols = createSymbols sigs adts
-  undefined
+-- typeCheck :: File -> Maybe ()
+-- typeCheck File {topLevel = topLevel} = do
+--   let (adts, sigs, variants) =
+--         foldl
+--           ( \(adts', sigs', variants') tl -> case tl of
+--               TopLvlADT adt -> (adt : adts', sigs', variants')
+--               TopLvlFunSig sig -> (adts', sig : sigs', variants')
+--               TopLvlFunVariant variant -> (adts', sigs', variant : variants')
+--           )
+--           ([], [], [])
+--           topLevel
+--   let symbols = createSymbols sigs adts
+--   undefined

@@ -16,6 +16,7 @@ import Text.Megaparsec.Char.Lexer qualified as L
 import Text.Megaparsec.Pos (Pos)
 import Text.Megaparsec.State (initialState)
 import Text.Pretty.Simple (pPrint)
+import Parser.Types (File)
 
 type Parser = StateT (Maybe Pos, Bool) (Parsec Void Text)
 
@@ -85,13 +86,13 @@ withLineFold p = do
     put (minimalIndent, sameLine)
     return a
 
-testParser :: (Show a) => Parser a -> IO ()
+testParser :: (Show a) => Parser a -> IO a
 testParser p = run p "scratchpad"
 
-run :: (Show a) => Parser a -> FilePath -> IO ()
+run :: (Show a) => Parser a -> FilePath -> IO a
 run p file = run' p (Nothing, False) $ "parser-tests/" ++ file
 
-run' :: (Show a) => Parser a -> (Maybe Pos, Bool) -> FilePath -> IO ()
+run' :: (Show a) => Parser a -> (Maybe Pos, Bool) -> FilePath -> IO a
 run' p stateP file = do
     let evalP = evalStateT p stateP
     input <- TIO.readFile file
@@ -100,5 +101,7 @@ run' p stateP file = do
     print $ stateInput state
     putStrLn "\nResult:"
     case res of
-        Right a -> pPrint a
-        Left err -> putStrLn $ errorBundlePretty err
+        Right a -> return a
+        Left err -> do
+            putStrLn $ errorBundlePretty err
+            fail ""

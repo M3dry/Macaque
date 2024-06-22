@@ -47,6 +47,7 @@ executable macaque
         , Static
         , Static.TypeChecker
         , Static.Types
+        , Static.Test
     build-depends:
         , base
         , text

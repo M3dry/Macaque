@@ -5,7 +5,7 @@ module Static.TypeChecker where
 
 import Control.Applicative ((<|>))
 import Control.Monad.Reader (MonadTrans (lift), ask)
-import Control.Monad.State (MonadState (get, put))
+import Control.Monad.State (MonadState (get, put), modify)
 import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as M
 import Parser.Types (Expression (..), Identifier, Literal (..), Pattern (..), Type (..), TypeIdentifier (TypeIdentifier))
@@ -20,7 +20,11 @@ typeCheckExpr (ExprTypeConstructor tIden) = do
     constructorT <- lift . lift $ M.lookup tIden constructors
     return $ typeToTagged constructorT
 typeCheckExpr (ExprApplied fExpr paramExpr) = do
-    undefined
+    (fTagged, TypeArrow' paramT retT) <- typeCheckExpr fExpr
+    paramExprT <- typeCheckExpr paramExpr
+    paramT' <- eqTypes paramExprT paramT
+    _ <- eqTypes (fTagged, TypeArrow' paramT retT) (fTagged, TypeArrow' paramT' retT)
+    return retT
 typeCheckExpr (ExprTyped expr t) = do
     let t' = typeToTagged t
     x <- typeCheckExpr expr
@@ -39,15 +43,19 @@ typeCheckExpr (ExprIfElse condExpr trueExpr falseExpr) = do
     falseT <- typeCheckExpr falseExpr
     eqTypes trueT falseT
 typeCheckExpr (ExprCase expr pats) = do
-   undefined
-typeCheckExpr (ExprLambda paramPats expr) = do
     undefined
+typeCheckExpr (ExprLambda paramPats expr) = do
+    (taggedTs, idens) <-  foldl (\(ts, ms) (t, m) -> (t:ts, M.union m ms)) ([], M.empty) <$> mapM typeCheckPattern paramPats
+    exprT <- typeCheckExpr expr
+    modify (M.union idens)
+    return $ foldl (\acc t -> ([], TypeArrow' t acc)) exprT taggedTs
 typeCheckExpr (ExprLiteral (LitNumber _ _)) = return $ typeToTagged $ TypeSimple (TypeIdentifier "Int")
 typeCheckExpr (ExprLiteral (LitString _)) = return $ typeToTagged $ TypeSimple (TypeIdentifier "String")
 typeCheckExpr (ExprLiteral (LitChar _)) = return $ typeToTagged $ TypeSimple (TypeIdentifier "Char")
 
-typeCheckPattern :: Pattern safe -> TypeChecker (Type, Map Identifier Type)
-typeCheckPattern = undefined
+typeCheckPattern :: Pattern safe -> TypeChecker (TaggedType, Map Identifier TaggedType)
+typeCheckPattern (PatVariable iden) = return (([iden], TypeHole'), M.singleton iden ([iden], TypeHole'))
+typeCheckPattern _ = undefined
 
 unfoldTypeArrow :: Type -> [Type]
 unfoldTypeArrow = unfoldTypeArrow'

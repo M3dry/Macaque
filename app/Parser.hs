@@ -174,7 +174,7 @@ expressionP = typed >>= application
             <|> (P.T.ExprTypeConstructor <$> typeIdentifierP)
             <|> lambdaP
             <|> between (lexeme' (char '(')) (lexeme (char ')')) expressionP
-            <|> (P.T.ExprLiteral <$> literalP)
+            <|> (P.T.ExprLiteral <$> lexeme literalP)
     letP = withLineFold $ do
         keyword' "let"
         (n, nExpr) <- withLineFold $ do

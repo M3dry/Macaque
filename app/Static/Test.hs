@@ -18,7 +18,8 @@ sigs = M.fromList
     [(Identifier "add",
       TypeArrow (simpleType "Int")
                 (TypeArrow (simpleType "Int")
-                           (simpleType "Int")))]
+                           (simpleType "Int")))
+    , (Identifier "hundo", TypeSimple $ TypeIdentifier "Int")]
 
 typeCheckRunner :: TypeChecker ret -> Maybe ret
 typeCheckRunner = runTypeChecker Symbols{constructors=M.empty,signatures=sigs} M.empty

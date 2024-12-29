@@ -11,10 +11,11 @@ import Data.Map.Strict qualified as M
 import Parser.Types (Expression (..), Identifier, Literal (..), Pattern (..), Type (..), TypeIdentifier (TypeIdentifier))
 import Static.Types
 
-
-
 typeCheckExpr :: Expression -> TypeChecker TaggedType
-typeCheckExpr (ExprVar iden) = return ([iden], TypeHole')
+typeCheckExpr (ExprVar iden) = do
+    Symbols{signatures} <- ask
+    idens <- get
+    lift . lift $ (M.lookup iden idens <|> (fmap typeToTagged $ M.lookup iden signatures))
 typeCheckExpr (ExprTypeConstructor tIden) = do
     Symbols{constructors} <- ask
     constructorT <- lift . lift $ M.lookup tIden constructors

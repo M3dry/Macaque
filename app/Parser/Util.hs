@@ -1,22 +1,31 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Parser.Util (Parser, whiteSpace, whiteSpace', lexeme, lexeme', keyword, keyword', reserved, reservedKeywords, checkIndent, withLineFold, testParser, run, run') where
+module Parser.Util (Parser, whiteSpace, whiteSpace', lexeme, lexeme', keyword, keyword', reserved, reservedKeywords, checkIndent, withLineFold, pos, testParser, run, run') where
 
 import Control.Applicative hiding (some)
 import Control.Applicative.Combinators (choice)
-import Control.Monad.State (StateT (runStateT), evalStateT, get, put)
+import Control.Monad.State (StateT, evalStateT, get, put)
 import Data.Functor (void)
 import Data.Text (Text)
-import Data.Text qualified as T
 import Data.Text.IO qualified as TIO
 import Data.Void (Void)
-import Text.Megaparsec (MonadParsec (eof, lookAhead), Parsec, PosState (PosState), SourcePos (SourcePos), State (State, stateInput), chunk, errorBundlePretty, mkPos, pos1, runParser', skipSome, (<?>))
+import Text.Megaparsec (
+    MonadParsec (eof, lookAhead),
+    Parsec,
+    SourcePos,
+    State (stateInput),
+    chunk,
+    errorBundlePretty,
+    getSourcePos,
+    pos1,
+    runParser',
+    skipSome,
+    (<?>),
+ )
 import Text.Megaparsec.Char (char)
 import Text.Megaparsec.Char.Lexer qualified as L
 import Text.Megaparsec.Pos (Pos)
 import Text.Megaparsec.State (initialState)
-import Text.Pretty.Simple (pPrint)
-import Parser.Types (File)
 
 type Parser = StateT (Maybe Pos, Bool) (Parsec Void Text)
 
@@ -85,6 +94,9 @@ withLineFold p = do
     a <- p
     put (minimalIndent, sameLine)
     return a
+
+pos :: Parser SourcePos
+pos = getSourcePos
 
 testParser :: (Show a) => Parser a -> IO a
 testParser p = run p "scratchpad"

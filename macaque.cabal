@@ -41,20 +41,23 @@ executable macaque
     import:           warnings
     main-is:          Main.hs
     other-modules:
+        , AST
         , Parser
-        , Parser.Types
+        , Parser.AST
         , Parser.Util
-        , Static
-        , Static.TypeChecker
-        , Static.Types
-        , Static.Test
+        , NaiveEvaluator
+        , NaiveEvaluator.AST
     build-depends:
         , base
         , text
+        , pretty-simple
         , megaparsec
         , parser-combinators
-        , mtl
-        , pretty-simple
+        , recursion-schemes
+        , data-fix
         , containers
+        , effectful
+        , mtl
+        , transformers
     hs-source-dirs:   app
     default-language: GHC2021

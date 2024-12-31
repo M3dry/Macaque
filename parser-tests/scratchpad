@@ -1,4 +1,11 @@
 expr
- add
- 100
- 200
+ let test = 100 in
+   let f = (\x ->
+              case x of
+                  () -> "unit"
+                  100 -> "hundred"
+                  'c' -> "char"
+                  "str" -> "string"
+                  (x, y) -> (f x, f y)
+                  _ -> "something else")
+     in f (100, 100)

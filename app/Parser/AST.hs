@@ -16,11 +16,13 @@ type instance TypeUnit Parsing = SourcePos
 type instance LitNumber Parsing = SourcePos
 type instance LitString Parsing = SourcePos
 type instance LitChar Parsing = SourcePos
+type instance LitUnit Parsing = SourcePos
 
 type instance PatVariable Parsing = SourcePos
 type instance PatCapture Parsing = SourcePos
 type instance PatConstructor Parsing = SourcePos
 type instance PatLiteral Parsing = SourcePos
+type instance PatTuple Parsing = SourcePos
 type instance PatIgnore Parsing = SourcePos
 
 type instance ExprVar Parsing = SourcePos
@@ -32,3 +34,4 @@ type instance ExprIfElse Parsing = SourcePos
 type instance ExprCase Parsing = SourcePos
 type instance ExprLambda Parsing = SourcePos
 type instance ExprLiteral Parsing = SourcePos
+type instance ExprTuple Parsing = SourcePos

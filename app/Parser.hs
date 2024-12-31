@@ -74,17 +74,18 @@ typeP inParens =
 
 literalP :: Parser (AST.Literal Parsing)
 literalP =
-    ( ( \p ms ->
-            ( case ms of
-                Just '-' -> AST.LitNumber p AST.Negative
-                _ -> AST.LitNumber p AST.Positive
+    AST.LitUnit <$> pos <* lexeme (chunk "()")
+        <|> ( ( \p ms ->
+                    ( case ms of
+                        Just '-' -> AST.LitNumber p AST.Negative
+                        _ -> AST.LitNumber p AST.Positive
+                    )
+                        . T.pack
+              )
+                <$> pos
+                <*> optional (char '-' <|> char '+')
+                <*> some digitChar
             )
-                . T.pack
-      )
-        <$> pos
-        <*> optional (char '-' <|> char '+')
-        <*> some digitChar
-    )
         <|> ( AST.LitChar
                 <$> pos
                 <*> (char '\'' *> L.charLiteral <* char '\'')
@@ -119,6 +120,14 @@ patternP inParens =
                     ti <- typeIdentifierP
                     pats <- if inParens' then many (checkIndent *> patternP inParens') else pure []
                     return $ AST.PatConstructor p ti pats
+                )
+            <|> try
+                ( withLineFold $ do
+                    p <- pos
+                    _ <- lexeme' (char '(')
+                    pat <- lexeme' (patternP True)
+                    pats <- someTill (lexeme' (char ',') *> lexeme' (patternP True)) (void $ lexeme (char ')'))
+                    return $ AST.PatTuple p (pat : pats)
                 )
             <|> between (lexeme' (char '(')) (lexeme (char ')')) (patternP True)
 
@@ -159,8 +168,16 @@ expressionP = typed >>= application
             <|> (AST.ExprVar <$> pos <*> identifierP)
             <|> (AST.ExprTypeConstructor <$> pos <*> typeIdentifierP)
             <|> lambdaP
+            <|> try
+                ( withLineFold $ do
+                    p <- pos
+                    _ <- lexeme' (char '(')
+                    expr <- lexeme' expressionP
+                    exprs <- someTill (lexeme' (char ',') *> lexeme' expressionP) (void $ lexeme (char ')'))
+                    return $ AST.ExprTuple p (expr : exprs)
+                )
+            <|> try (AST.ExprLiteral <$> pos <*> lexeme literalP)
             <|> between (lexeme' (char '(')) (lexeme (char ')')) expressionP
-            <|> (AST.ExprLiteral <$> pos <*> lexeme literalP)
     letP = withLineFold $ do
         p <- pos
         keyword' "let"

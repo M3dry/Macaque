@@ -86,29 +86,33 @@ instance Extract Type where
 --     alg (TypeUnitF tag) = TypeHole (f tag)
 
 data Sign = Positive | Negative
-    deriving (Show)
+    deriving (Show, Eq)
 
 data Literal tag
     = LitNumber (LitNumber tag) Sign Text
     | LitString (LitString tag) Text
     | LitChar (LitChar tag) Char
+    | LitUnit (LitUnit tag)
 
 deriving instance
     ( Show (LitNumber tag)
     , Show (LitString tag)
     , Show (LitChar tag)
+    , Show (LitUnit tag)
     ) =>
     Show (Literal tag)
 
 type family LitNumber tag
 type family LitString tag
 type family LitChar tag
-type instance AllTags (Literal tag) = '[LitNumber tag, LitString tag, LitChar tag]
+type family LitUnit tag
+type instance AllTags (Literal tag) = '[LitNumber tag, LitString tag, LitChar tag, LitUnit tag]
 
 instance Extract Literal where
     extractTag (LitNumber tag _ _) = tag
     extractTag (LitString tag _) = tag
     extractTag (LitChar tag _) = tag
+    extractTag (LitUnit tag) = tag
 
 --
 -- modifyLitTags ::
@@ -126,6 +130,7 @@ data Pattern tag
     | PatCapture (PatCapture tag) Identifier (Pattern tag)
     | PatConstructor (PatConstructor tag) TypeIdentifier [Pattern tag]
     | PatLiteral (PatLiteral tag) (Literal tag)
+    | PatTuple (PatTuple tag) [Pattern tag]
     | PatIgnore (PatIgnore tag)
 
 deriving instance
@@ -134,6 +139,7 @@ deriving instance
     , Show (PatConstructor tag)
     , Show (PatLiteral tag)
     , Show (PatIgnore tag)
+    , Show (PatTuple tag)
     , Show (Literal tag)
     ) =>
     Show (Pattern tag)
@@ -142,6 +148,7 @@ type family PatVariable tag
 type family PatCapture tag
 type family PatConstructor tag
 type family PatLiteral tag
+type family PatTuple tag
 type family PatIgnore tag
 type instance
     AllTags (Pattern tag) =
@@ -149,6 +156,7 @@ type instance
          , PatCapture tag
          , PatConstructor tag
          , PatLiteral tag
+         , PatTuple tag
          , PatIgnore tag
          ]
 
@@ -159,6 +167,7 @@ instance Extract Pattern where
     extractTag (PatCapture tag _ _) = tag
     extractTag (PatConstructor tag _ _) = tag
     extractTag (PatLiteral tag _) = tag
+    extractTag (PatTuple tag _) = tag
     extractTag (PatIgnore tag) = tag
 
 -- type AllPatEQ tag1 tag2 = (AllEq' "Pattern" tag1 tag2, AllEq' "Literal" tag1 tag2, PatVariable tag1 ~ LitNumber tag1, PatVariable tag2 ~ LitNumber tag2)
@@ -187,6 +196,7 @@ data Expression tag
     | ExprCase (ExprCase tag) (Expression tag) [(Pattern tag, Expression tag)]
     | ExprLambda (ExprLambda tag) [Pattern tag] (Expression tag)
     | ExprLiteral (ExprLiteral tag) (Literal tag)
+    | ExprTuple (ExprTuple tag) [Expression tag]
 
 deriving instance
     ( Show (ExprVar tag)
@@ -198,6 +208,7 @@ deriving instance
     , Show (ExprCase tag)
     , Show (ExprLambda tag)
     , Show (ExprLiteral tag)
+    , Show (ExprTuple tag)
     , Show (Pattern tag)
     , Show (Literal tag)
     , Show (Type tag)
@@ -213,6 +224,7 @@ type family ExprIfElse tag
 type family ExprCase tag
 type family ExprLambda tag
 type family ExprLiteral tag
+type family ExprTuple tag
 type instance
     AllTags (Expression tag) =
         '[ ExprVar tag
@@ -224,6 +236,7 @@ type instance
          , ExprCase tag
          , ExprLambda tag
          , ExprLiteral tag
+         , ExprTuple tag
          ]
 
 makeBaseFunctor ''Expression
@@ -238,6 +251,7 @@ instance Extract Expression where
     extractTag (ExprCase tag _ _) = tag
     extractTag (ExprLambda tag _ _) = tag
     extractTag (ExprLiteral tag _) = tag
+    extractTag (ExprTuple tag _) = tag
 
 -- modifyExprTags ::
 --     forall tag1 tag2.

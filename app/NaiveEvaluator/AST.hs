@@ -1,49 +1,40 @@
-{-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE DataKinds #-}
 
-module NaiveEvaluator.AST (Typed, TypeInfo (..), TypeInfoF (..), Annotation) where
+module NaiveEvaluator.AST (InterpreterError (..), Interpreter, ValueInfo (..), showValue) where
 
-import AST
-import Data.Functor.Foldable.TH (makeBaseFunctor)
-import Parser.AST (Parsing)
-import Text.Megaparsec (SourcePos)
+import Data.Map qualified as M
+import Data.Text qualified as T
+import Effectful (Eff)
+import Effectful.Error.Static (Error)
+import Effectful.Reader.Static (Reader)
 
-data Typed
+data InterpreterError
+    = IEVariableNotDefined
+    | IENotAFunction
+    | IEBadPattern
+    | IENoMatch
+    deriving (Show)
 
-data TypeInfo
-    = TAny
-    | TUnit
-    | TSimple String
-    | TTuple [TypeInfo]
-    | TArrow TypeInfo TypeInfo
+type Interpreter a = Eff '[Reader (M.Map T.Text ValueInfo), Error InterpreterError] a
 
-type Annotation = (SourcePos, TypeInfo)
+data ValueInfo
+    = VUnit
+    | VInt Int
+    | VChar Char
+    | VString String
+    | VTuple [ValueInfo]
+    | VFunction (ValueInfo -> Interpreter ValueInfo)
 
-makeBaseFunctor ''TypeInfo
+showValue :: ValueInfo -> String
+showValue VUnit = "()"
+showValue (VInt n) = show n
+showValue (VChar ch) = show ch
+showValue (VString str) = show str
+showValue (VTuple vs) = "(" <> join ", " (map showValue vs) <> ")"
+showValue (VFunction _) = "function"
 
-type instance TypeArrow Typed = TypeArrow Parsing
-type instance TypeTuple Typed = TypeTuple Parsing
-type instance TypeSimple Typed = TypeSimple Parsing
-type instance TypeHole Typed = TypeHole Parsing
-type instance TypeUnit Typed = TypeUnit Parsing
-
-type instance LitNumber Typed = LitNumber Parsing
-type instance LitString Typed = LitString Parsing
-type instance LitChar Typed = LitString Parsing
-
-type instance PatVariable Typed = Annotation
-type instance PatCapture Typed = Annotation
-type instance PatConstructor Typed = Annotation
-type instance PatLiteral Typed = Annotation
-type instance PatIgnore Typed = Annotation
-
-type instance ExprVar Typed = Annotation
-type instance ExprTypeConstructor Typed = Annotation
-type instance ExprApplied Typed = Annotation
-type instance ExprTyped Typed = Annotation
-type instance ExprLet Typed = Annotation
-type instance ExprIfElse Typed = Annotation
-type instance ExprCase Typed = Annotation
-type instance ExprLambda Typed = Annotation
-type instance ExprLiteral Typed = Annotation
+join :: String -> [String] -> String
+join _ [] = ""
+join _ [x] = x
+join sep [x, y] = x <> sep <> y
+join sep (x:y:xs) = x <> sep <> y <> sep <> join sep xs

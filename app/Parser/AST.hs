@@ -35,3 +35,9 @@ type instance ExprCase Parsing = SourcePos
 type instance ExprLambda Parsing = SourcePos
 type instance ExprLiteral Parsing = SourcePos
 type instance ExprTuple Parsing = SourcePos
+
+type instance GADTtag Parsing = SourcePos
+type instance Constructortag Parsing = SourcePos
+
+type instance Functiontag Parsing = SourcePos
+type instance FunctionVarianttag Parsing = SourcePos

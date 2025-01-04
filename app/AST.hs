@@ -22,6 +22,10 @@ type family AllEq' (xs :: [K.Type]) :: K.Constraint where
 type family TypeOfFirst (xs :: [K.Type]) :: K.Type where
     TypeOfFirst (x ': _) = x
 
+type family ApplyConstraint (xs :: [K.Type]) (c :: K.Type -> K.Constraint) :: K.Constraint where
+    ApplyConstraint (x ': xs) c = (c x, ApplyConstraint xs c)
+    ApplyConstraint '[] _ = ()
+
 type family ApplyConstraint2 (xs :: [K.Type]) (ys :: [K.Type]) (c :: K.Type -> K.Type -> K.Constraint) :: K.Constraint where
     ApplyConstraint2 (x ': xs) (y ': ys) c = (c x y, ApplyConstraint2 xs ys c)
     ApplyConstraint2 '[] '[] _ = ()
@@ -45,15 +49,6 @@ data Type tag
     | TypeHole (TypeHole tag)
     | TypeUnit (TypeUnit tag)
 
-deriving instance
-    ( Show (TypeArrow tag)
-    , Show (TypeTuple tag)
-    , Show (TypeSimple tag)
-    , Show (TypeHole tag)
-    , Show (TypeUnit tag)
-    ) =>
-    Show (Type tag)
-
 type family TypeArrow tag
 type family TypeTuple tag
 type family TypeSimple tag
@@ -63,27 +58,14 @@ type instance AllTags (Type tag) = '[TypeArrow tag, TypeTuple tag, TypeSimple ta
 
 makeBaseFunctor ''Type
 
+deriving instance (ApplyConstraint (AllTags (Type tag)) Show) => Show (Type tag)
+
 instance Extract Type where
     extractTag (TypeArrow tag _ _) = tag
     extractTag (TypeTuple tag _) = tag
     extractTag (TypeSimple tag _) = tag
     extractTag (TypeHole tag) = tag
     extractTag (TypeUnit tag) = tag
-
--- modifyTypeTags ::
---     forall tag1 tag2.
---     (AllEq' "Type" tag1 tag2) =>
---     (TypeUnit tag1 -> TypeUnit tag2) ->
---     Type tag1 ->
---     Type tag2
--- modifyTypeTags f = cata alg
---   where
---     alg :: TypeF tag1 (Type tag2) -> Type tag2
---     alg (TypeArrowF tag t1 t2) = TypeArrow (f tag) t1 t2
---     alg (TypeTupleF tag ts) = TypeTuple (f tag) ts
---     alg (TypeSimpleF tag typeIden) = TypeSimple (f tag) typeIden
---     alg (TypeHoleF tag) = TypeHole (f tag)
---     alg (TypeUnitF tag) = TypeHole (f tag)
 
 data Sign = Positive | Negative
     deriving (Show, Eq)
@@ -94,36 +76,19 @@ data Literal tag
     | LitChar (LitChar tag) Char
     | LitUnit (LitUnit tag)
 
-deriving instance
-    ( Show (LitNumber tag)
-    , Show (LitString tag)
-    , Show (LitChar tag)
-    , Show (LitUnit tag)
-    ) =>
-    Show (Literal tag)
-
 type family LitNumber tag
 type family LitString tag
 type family LitChar tag
 type family LitUnit tag
 type instance AllTags (Literal tag) = '[LitNumber tag, LitString tag, LitChar tag, LitUnit tag]
 
+deriving instance (ApplyConstraint (AllTags (Literal tag)) Show) => Show (Literal tag)
+
 instance Extract Literal where
     extractTag (LitNumber tag _ _) = tag
     extractTag (LitString tag _) = tag
     extractTag (LitChar tag _) = tag
     extractTag (LitUnit tag) = tag
-
---
--- modifyLitTags ::
---     forall tag1 tag2.
---     (AllEq' "Literal" tag1 tag2) =>
---     (LitNumber tag1 -> LitNumber tag2) ->
---     Literal tag1 ->
---     Literal tag2
--- modifyLitTags f (LitNumber tag sign num) = LitNumber (f tag) sign num
--- modifyLitTags f (LitString tag str) = LitString (f tag) str
--- modifyLitTags f (LitChar tag ch) = LitChar (f tag) ch
 
 data Pattern tag
     = PatVariable (PatVariable tag) Identifier
@@ -132,17 +97,6 @@ data Pattern tag
     | PatLiteral (PatLiteral tag) (Literal tag)
     | PatTuple (PatTuple tag) [Pattern tag]
     | PatIgnore (PatIgnore tag)
-
-deriving instance
-    ( Show (PatVariable tag)
-    , Show (PatCapture tag)
-    , Show (PatConstructor tag)
-    , Show (PatLiteral tag)
-    , Show (PatIgnore tag)
-    , Show (PatTuple tag)
-    , Show (Literal tag)
-    ) =>
-    Show (Pattern tag)
 
 type family PatVariable tag
 type family PatCapture tag
@@ -162,6 +116,8 @@ type instance
 
 makeBaseFunctor ''Pattern
 
+deriving instance (ApplyConstraint (AllTags (Pattern tag)) Show, Show (Literal tag)) => Show (Pattern tag)
+
 instance Extract Pattern where
     extractTag (PatVariable tag _) = tag
     extractTag (PatCapture tag _ _) = tag
@@ -170,50 +126,17 @@ instance Extract Pattern where
     extractTag (PatTuple tag _) = tag
     extractTag (PatIgnore tag) = tag
 
--- type AllPatEQ tag1 tag2 = (AllEq' "Pattern" tag1 tag2, AllEq' "Literal" tag1 tag2, PatVariable tag1 ~ LitNumber tag1, PatVariable tag2 ~ LitNumber tag2)
--- modifyPatTags ::
---     forall tag1 tag2.
---     (AllPatEQ tag1 tag2) =>
---     (PatVariable tag1 -> PatVariable tag2) ->
---     Pattern tag1 ->
---     Pattern tag2
--- modifyPatTags f = cata alg
---   where
---     alg :: PatternF tag1 (Pattern tag2) -> Pattern tag2
---     alg (PatVariableF tag iden) = PatVariable (f tag) iden
---     alg (PatCaptureF tag iden pat) = PatCapture (f tag) iden pat
---     alg (PatConstructorF tag typeIden pats) = PatConstructor (f tag) typeIden pats
---     alg (PatLiteralF tag lit) = PatLiteral (f tag) (modifyLitTags f lit)
---     alg (PatIgnoreF tag) = PatIgnore (f tag)
-
 data Expression tag
     = ExprVar (ExprVar tag) Identifier
     | ExprTypeConstructor (ExprTypeConstructor tag) TypeIdentifier
     | ExprApplied (ExprApplied tag) (Expression tag) (Expression tag)
     | ExprTyped (ExprTyped tag) (Expression tag) (Type tag)
-    | ExprLet (ExprLet tag) Identifier (Expression tag) (Expression tag)
+    | ExprLet (ExprLet tag) [(Identifier, Expression tag)] (Expression tag)
     | ExprIfElse (ExprIfElse tag) (Expression tag) (Expression tag) (Expression tag)
     | ExprCase (ExprCase tag) (Expression tag) [(Pattern tag, Expression tag)]
     | ExprLambda (ExprLambda tag) [Pattern tag] (Expression tag)
     | ExprLiteral (ExprLiteral tag) (Literal tag)
     | ExprTuple (ExprTuple tag) [Expression tag]
-
-deriving instance
-    ( Show (ExprVar tag)
-    , Show (ExprTypeConstructor tag)
-    , Show (ExprApplied tag)
-    , Show (ExprTyped tag)
-    , Show (ExprLet tag)
-    , Show (ExprIfElse tag)
-    , Show (ExprCase tag)
-    , Show (ExprLambda tag)
-    , Show (ExprLiteral tag)
-    , Show (ExprTuple tag)
-    , Show (Pattern tag)
-    , Show (Literal tag)
-    , Show (Type tag)
-    ) =>
-    Show (Expression tag)
 
 type family ExprVar tag
 type family ExprTypeConstructor tag
@@ -241,38 +164,75 @@ type instance
 
 makeBaseFunctor ''Expression
 
+deriving instance
+    ( ApplyConstraint (AllTags (Expression tag)) Show
+    , Show (Pattern tag)
+    , Show (Literal tag)
+    , Show (Type tag)
+    ) =>
+    Show (Expression tag)
+
 instance Extract Expression where
     extractTag (ExprVar tag _) = tag
     extractTag (ExprTypeConstructor tag _) = tag
     extractTag (ExprApplied tag _ _) = tag
     extractTag (ExprTyped tag _ _) = tag
-    extractTag (ExprLet tag _ _ _) = tag
+    extractTag (ExprLet tag _ _) = tag
     extractTag (ExprIfElse tag _ _ _) = tag
     extractTag (ExprCase tag _ _) = tag
     extractTag (ExprLambda tag _ _) = tag
     extractTag (ExprLiteral tag _) = tag
     extractTag (ExprTuple tag _) = tag
 
--- modifyExprTags ::
---     forall tag1 tag2.
---     ( AllEq' "Expression" tag1 tag2
---     , AllEq' "Type" tag1 tag2
---     , AllPatEQ tag1 tag2
---     , AllEq '[ExprVar tag1, TypeUnit tag1, PatIgnore tag1]
---     , AllEq '[ExprVar tag2, TypeUnit tag2, PatIgnore tag2]
---     ) =>
---     (ExprVar tag1 -> ExprVar tag2) ->
---     Expression tag1 ->
---     Expression tag2
--- modifyExprTags f = cata alg
---   where
---     alg :: ExpressionF tag1 (Expression tag2) -> Expression tag2
---     alg (ExprVarF tag iden) = ExprVar (f tag) iden
---     alg (ExprTypeConstructorF tag typeIden) = ExprTypeConstructor (f tag) typeIden
---     alg (ExprAppliedF tag expr1 expr2) = ExprApplied (f tag) expr1 expr2
---     alg (ExprTypedF tag expr t) = ExprTyped (f tag) expr (modifyTypeTags f t)
---     alg (ExprLetF tag iden idenExpr expr) = ExprLet (f tag) iden idenExpr expr
---     alg (ExprIfElseF tag condExpr trueExpr falseExpr) = ExprIfElse (f tag) condExpr trueExpr falseExpr
---     alg (ExprCaseF tag matchExpr pats) = ExprCase (f tag) matchExpr $ map (first (modifyPatTags f)) pats
---     alg (ExprLambdaF tag pats expr) = ExprLambda (f tag) (map (modifyPatTags f) pats) expr
---     alg (ExprLiteralF tag lit) = ExprLiteral (f tag) $ modifyLitTags f lit
+data GADT tag = GADT (GADTtag tag) TypeIdentifier [Constructor tag]
+
+type family GADTtag tag
+type instance AllTags (GADT tag) = '[GADTtag tag]
+
+deriving instance (ApplyConstraint (AllTags (GADT tag)) Show, Show (Constructor tag)) => Show (GADT tag)
+
+---```
+-- Bar : Int -> (Bool, Int) -> Foo
+-- ```
+data Constructor tag = Constructor (Constructortag tag) TypeIdentifier (Type tag)
+
+type family Constructortag tag
+type instance AllTags (Constructor tag) = '[Constructortag tag]
+
+deriving instance (ApplyConstraint (AllTags (Constructor tag)) Show, Show (Type tag)) => Show (Constructor tag)
+
+-- makes sure the constructor constructs a correct type
+mkConstructor :: TypeIdentifier -> TypeIdentifier -> Constructortag tag -> Type tag -> Maybe (Constructor tag)
+mkConstructor typeName constructorName tag signature
+    | checkSignature signature = Just $ Constructor tag constructorName signature
+    | otherwise = Nothing
+  where
+    checkSignature (TypeArrow _ _ t) = checkSignature t
+    checkSignature (TypeTuple _ _) = False
+    checkSignature (TypeSimple _ typeIden) = typeIden == typeName
+    checkSignature (TypeHole _) = True -- TODO: ehhh what do I want to do here???????
+    checkSignature (TypeUnit _) = False
+
+data Function tag = Function (Functiontag tag) Identifier (Type tag) [FunctionVariant tag]
+
+type family Functiontag tag
+type instance AllTags (Function tag) = '[Functiontag tag]
+
+deriving instance
+    ( ApplyConstraint (AllTags (Function tag)) Show
+    , Show (Type tag)
+    , Show (FunctionVariant tag)
+    ) =>
+    Show (Function tag)
+
+data FunctionVariant tag = FunctionVariant (FunctionVarianttag tag) [Pattern tag] (Expression tag)
+
+type family FunctionVarianttag tag
+type instance AllTags (FunctionVariant tag) = '[FunctionVarianttag tag]
+
+deriving instance
+    ( ApplyConstraint (AllTags (FunctionVariant tag)) Show
+    , Show (Expression tag)
+    , Show (Pattern tag)
+    ) =>
+    Show (FunctionVariant tag)

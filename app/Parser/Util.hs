@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Parser.Util (Parser, whiteSpace, whiteSpace', lexeme, lexeme', keyword, keyword', reserved, reservedKeywords, checkIndent, withLineFold, pos, testParser, run, run') where
+module Parser.Util (Parser, whiteSpace, whiteSpace', lexeme, lexeme', keyword, keyword', reserved, reservedKeywords, checkIndent, withLineFold, inBlock, pos, testParser, run, run') where
 
 import Control.Applicative hiding (some)
 import Control.Applicative.Combinators (choice)
@@ -20,14 +20,14 @@ import Text.Megaparsec (
     pos1,
     runParser',
     skipSome,
-    (<?>),
+    (<?>), try,
  )
 import Text.Megaparsec.Char (char)
 import Text.Megaparsec.Char.Lexer qualified as L
 import Text.Megaparsec.Pos (Pos)
 import Text.Megaparsec.State (initialState)
 
-type Parser = StateT (Maybe Pos, Bool) (Parsec Void Text)
+type Parser = StateT (Maybe Pos, Bool, Bool) (Parsec Void Text)
 
 lineComment :: Parser ()
 lineComment = L.skipLineComment "--"
@@ -37,7 +37,7 @@ blockComment = L.skipBlockComment "{-" "-}"
 
 whiteSpace :: Parser ()
 whiteSpace = do
-    (_, sameLine) <- get
+    (_, sameLine, _) <- get
     let wsChars = if sameLine then whiteSpaceCharsSameLine else whiteSpaceChars
     L.space
         (skipSome wsChars)
@@ -52,13 +52,14 @@ whiteSpaceCharsSameLine = void (char ' ') <?> "whitespace"
 
 whiteSpace' :: Parser ()
 whiteSpace' = do
-    (minimalIndent, _) <- get
-    void
-        ( case minimalIndent of
-            Just minimalIndent' -> L.indentGuard whiteSpace GT minimalIndent'
-            Nothing -> L.indentGuard whiteSpace EQ pos1
-        )
-        <|> eof
+    (minimalIndent, _, block) <- get
+    try (lookAhead (whiteSpace *> eof))
+        <|> void
+            ( case minimalIndent of
+                Just minimalIndent' | block -> L.indentGuard whiteSpace EQ minimalIndent'
+                Just minimalIndent' -> L.indentGuard whiteSpace GT minimalIndent'
+                Nothing -> L.indentGuard whiteSpace EQ pos1
+            )
 
 lexeme :: Parser a -> Parser a
 lexeme = L.lexeme whiteSpace
@@ -73,26 +74,36 @@ keyword' :: Text -> Parser ()
 keyword' k = lexeme' (chunk k *> lookAhead whiteSpaceChars)
 
 reserved :: [Text]
-reserved = ["data", "let", "in", "if", "then", "else", "case", "of"]
+reserved = ["data", "where", "let", "in", "if", "then", "else", "case", "of"]
 
 reservedKeywords :: Parser ()
 reservedKeywords = choice $ keyword <$> reserved
 
 checkIndent :: Parser ()
 checkIndent = do
-    (minimalIndent, _) <- get
+    (minimalIndent, _, block) <- get
     _ <- case minimalIndent of
+        Just minimalIndent' | block -> L.indentGuard (return ()) EQ minimalIndent'
         Just minimalIndent' -> L.indentGuard (return ()) GT minimalIndent'
         Nothing -> L.indentGuard (return ()) EQ pos1
     return ()
 
 withLineFold :: Parser a -> Parser a
 withLineFold p = do
-    (minimalIndent, sameLine) <- get
+    (minimalIndent, sameLine, block) <- get
     currIndent <- L.indentLevel
-    put (Just currIndent, sameLine)
+    put (Just currIndent, sameLine, False)
     a <- p
-    put (minimalIndent, sameLine)
+    put (minimalIndent, sameLine, block)
+    return a
+
+inBlock :: Parser a -> Parser a
+inBlock p = do
+    (minimalIndent, sameLine, block) <- get
+    currIndent <- L.indentLevel
+    put (Just currIndent, sameLine, True)
+    a <- p
+    put (minimalIndent, sameLine, block)
     return a
 
 pos :: Parser SourcePos
@@ -102,9 +113,9 @@ testParser :: (Show a) => Parser a -> IO a
 testParser p = run p "scratchpad"
 
 run :: (Show a) => Parser a -> FilePath -> IO a
-run p file = run' p (Nothing, False) $ "parser-tests/" ++ file
+run p file = run' p (Nothing, False, False) $ "parser-tests/" ++ file
 
-run' :: (Show a) => Parser a -> (Maybe Pos, Bool) -> FilePath -> IO a
+run' :: (Show a) => Parser a -> (Maybe Pos, Bool, Bool) -> FilePath -> IO a
 run' p stateP file = do
     let evalP = evalStateT p stateP
     input <- TIO.readFile file

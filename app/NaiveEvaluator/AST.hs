@@ -13,6 +13,8 @@ data InterpreterError
     | IENotAFunction
     | IEBadPattern
     | IENoMatch
+    | IEIfElseCondNotBool ValueInfo
+    | IEBadArgumentToConstructor
     deriving (Show)
 
 type Interpreter a = Eff '[Reader (M.Map T.Text ValueInfo), Error InterpreterError] a
@@ -21,16 +23,30 @@ data ValueInfo
     = VUnit
     | VInt Int
     | VChar Char
-    | VString String
+    | VString T.Text
+    | VConstructed T.Text [ValueInfo]
     | VTuple [ValueInfo]
-    | VFunction (ValueInfo -> Interpreter ValueInfo)
+    | VLambda (ValueInfo -> Interpreter ValueInfo)
+    | VFunction (ValueInfo -> Either InterpreterError ValueInfo)
+
+instance Show ValueInfo where
+    show VUnit = "VUnit"
+    show (VInt n) = "VInt " <> show n
+    show (VChar ch) = "VChar " <> show ch
+    show (VString txt) = "VSTring " <> show txt
+    show (VConstructed name vs) = "VConstructed " <> show name <> show vs
+    show (VTuple vs) = "VTuple " <> show vs
+    show (VLambda _) = "VLambda"
+    show (VFunction _) = "VFunction"
 
 showValue :: ValueInfo -> String
 showValue VUnit = "()"
 showValue (VInt n) = show n
 showValue (VChar ch) = show ch
 showValue (VString str) = show str
+showValue (VConstructed name fields) = T.unpack name <> " " <> join " " (map showValue fields)
 showValue (VTuple vs) = "(" <> join ", " (map showValue vs) <> ")"
+showValue (VLambda _) = "lambda"
 showValue (VFunction _) = "function"
 
 join :: String -> [String] -> String

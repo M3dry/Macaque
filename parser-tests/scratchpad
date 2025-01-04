@@ -1,11 +1,19 @@
-expr
- let test = 100 in
-   let f = (\x ->
-              case x of
-                  () -> "unit"
-                  100 -> "hundred"
-                  'c' -> "char"
-                  "str" -> "string"
-                  (x, y) -> (f x, f y)
-                  _ -> "something else")
-     in f (100, 100)
+data Bool where
+  False : Bool
+  True : Bool
+
+data Maybe where
+    Just : _ -> Maybe
+    Nothing : Maybe
+
+stringify : _ -> String
+stringify () = "unit"
+stringify (x, y) = (stringify x, stringify y)
+stringify (Just x) = Just (stringify x)
+stringify Nothing = "Nothing"
+stringify _ = "value"
+
+main : _
+main =
+  let f = (\x -> "100")
+    in stringify (Just (100, ()))

@@ -9,11 +9,13 @@ module Parser where
 import AST qualified
 import Control.Applicative hiding (many, some)
 import Control.Applicative.Combinators (between, many, some, someTill)
-import Control.Monad (void)
+import Control.Monad (void, guard)
+import Data.List.NonEmpty (NonEmpty ((:|)))
+import Data.Set qualified as S
 import Data.Text qualified as T
 import Parser.AST
 import Parser.Util
-import Text.Megaparsec (MonadParsec (notFollowedBy, try), chunk, manyTill)
+import Text.Megaparsec (ErrorItem (..), MonadParsec (notFollowedBy, try), chunk, failure, manyTill)
 import Text.Megaparsec.Char (alphaNumChar, char, digitChar, lowerChar, upperChar)
 import Text.Megaparsec.Char.Lexer qualified as L
 
@@ -45,7 +47,7 @@ typeP inParens =
         <*> if inParens
             then
                 optional
-                    ( try $ do
+                    ( do
                         checkIndent
                         _ <- lexeme' (chunk "->")
                         typeP True
@@ -53,7 +55,8 @@ typeP inParens =
             else pure Nothing
   where
     typeP' =
-        (AST.TypeSimple <$> pos <*> typeIdentifierP)
+        AST.TypeHole <$> pos <* lexeme (char '_')
+            <|> (AST.TypeSimple <$> pos <*> typeIdentifierP)
             <|> try
                 ( withLineFold
                     ( do
@@ -97,7 +100,7 @@ literalP =
 
 patternP :: Bool -> Parser (AST.Pattern Parsing)
 patternP inParens =
-    (AST.PatLiteral <$> pos <*> literalP)
+    (AST.PatLiteral <$> pos <*> try literalP)
         <|> safeP inParens
   where
     safeP inParens' =
@@ -130,13 +133,6 @@ patternP inParens =
                     return $ AST.PatTuple p (pat : pats)
                 )
             <|> between (lexeme' (char '(')) (lexeme (char ')')) (patternP True)
-
---
--- NOTE: Testing only
-testExprP :: Parser (AST.Expression Parsing)
-testExprP = L.nonIndented whiteSpace . withLineFold $ do
-    keyword' "expr"
-    expressionP
 
 expressionP :: Parser (AST.Expression Parsing)
 expressionP = typed >>= application
@@ -181,14 +177,14 @@ expressionP = typed >>= application
     letP = withLineFold $ do
         p <- pos
         keyword' "let"
-        (n, nExpr) <- withLineFold $ do
+        idens <- withLineFold $ many $ do
             n <- lexeme' identifierP
             _ <- lexeme' (char '=')
             nExpr <- expressionP
             return (n, nExpr)
         checkIndent
         keyword' "in"
-        AST.ExprLet p n nExpr <$> expressionP
+        AST.ExprLet p idens <$> expressionP
     ifElseP = withLineFold $ do
         p <- pos
         keyword' "if"
@@ -218,24 +214,52 @@ expressionP = typed >>= application
         pats <- someTill (lexeme' $ patternP False) (lexeme' (chunk "->"))
         AST.ExprLambda p pats <$> expressionP
 
--- functionSignatureP :: Parser P.T.FunctionSignature
--- functionSignatureP = L.nonIndented whiteSpace . withLineFold $ do
---     name <- lexeme' identifierP
---     _ <- lexeme' (char ':')
---     t <- typeP True
---     return $ P.T.FunctionSignature{name = name, signature = t}
---
--- functionVariantP :: Parser P.T.FunctionVariant
--- functionVariantP = L.nonIndented whiteSpace . withLineFold $ do
---         name <- lexeme' identifierP
---         pats <- manyTill (lexeme' $ patternP False) (lexeme' $ char '=')
---         expr <- expressionP
---         return $ P.T.FunctionVariant{name=name, patterns=pats, expression=expr}
---
--- topLevelP :: Parser P.T.TopLevel
--- topLevelP = (P.T.TopLvlADT <$> adtP) <|> try (P.T.TopLvlFunSig <$> functionSignatureP) <|> (P.T.TopLvlFunVariant <$> functionVariantP)
---
--- fileP :: Parser P.T.File
--- fileP = do
---     topLevelDefs <- many topLevelP
---     return $ P.T.File{topLevel=topLevelDefs}
+gadtP :: Parser (AST.GADT Parsing)
+gadtP = L.nonIndented whiteSpace . withLineFold $ do
+    p <- pos
+    keyword' "data"
+    name <- typeIdentifierP
+    keyword' "where"
+    constructors <- inBlock $ do
+        many (withLineFold $ constructorP name)
+    return $ AST.GADT p name constructors
+
+constructorP :: AST.TypeIdentifier -> Parser (AST.Constructor Parsing)
+constructorP ofType = do
+    p <- pos
+    tIden <- typeIdentifierP
+    _ <- lexeme' (char ':')
+    signature <- typeP True
+    case AST.mkConstructor ofType tIden p signature of
+        Just c -> return c
+        Nothing -> failure Nothing (S.singleton $ Label ('C' :| "onstructor must create the type it is defined under"))
+
+functionP :: Parser (AST.Function Parsing)
+functionP = L.nonIndented whiteSpace $ do
+    (name, f) <- withLineFold $ do
+        p <- pos
+        name <- identifierP
+        _ <- lexeme' (char ':')
+        signature <- typeP True
+        return (name, AST.Function p name signature)
+    f <$> some (try $ functionVariantP name)
+
+functionVariantP :: AST.Identifier -> Parser (AST.FunctionVariant Parsing)
+functionVariantP name = L.nonIndented whiteSpace . withLineFold $ do
+    p <- pos
+    name' <- identifierP
+    guard (name' == name)
+    pats <- manyTill (patternP False) (lexeme' (char '='))
+    AST.FunctionVariant p pats <$> expressionP
+
+-- NOTE: Testing only
+testP :: Parser ([AST.GADT Parsing], [AST.Function Parsing])
+testP = do
+    gadts <- many gadtP
+    funs <- many functionP
+    return (gadts, funs)
+
+testAnyP :: Parser a -> Parser a
+testAnyP p = L.nonIndented whiteSpace . withLineFold $ do
+    keyword' "any"
+    p

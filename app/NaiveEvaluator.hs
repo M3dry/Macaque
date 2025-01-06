@@ -49,7 +49,6 @@ evaluate (ExprTypeConstructor _ (TypeIdentifier typeIden)) = do
 evaluate (ExprApplied _ fExpr argExpr) = do
     fValue <- evaluate fExpr
     f <- case fValue of
-        VLambda f -> return f
         VFunction f -> return $ \v -> case f v of
             Right v' -> return v'
             Left err -> throwError err
@@ -88,13 +87,24 @@ evaluate (ExprCase _ matchExpr branches) = do
     firstMatch ((Right patVars, branch) : _) = local (M.union patVars) $ evaluate branch
 evaluate (ExprLambda _ [] _) = do
     error "Can't have lambda with zero args, How did this get throught the parser lol"
-evaluate (ExprLambda _ [pat] expr) =
-    return $ VLambda $ \v -> do
-        m <- patValues v pat
-        local (M.union m) $ evaluate expr
-evaluate (ExprLambda tag (pat : pats) expr) = return $ VLambda $ \v -> do
-    m <- patValues v pat
-    local (M.union m) $ evaluate (ExprLambda tag pats expr)
+evaluate (ExprLambda _ [pat] expr) = do
+    context <- ask
+    return $ VFunction $ \v -> do
+        m <- case runPureEff $ runError $ runReader context $ patValues v pat of
+                Right res-> Right res
+                Left (_, err) -> Left err
+        case runPureEff $ runError $ runReader m $ evaluate expr of
+            Right v' -> Right v'
+            Left (_, err) -> Left err
+evaluate (ExprLambda tag (pat : pats) expr) = do
+    context <- ask
+    return $ VFunction $ \v -> do
+        m <- case runPureEff $ runError $ runReader context $ patValues v pat of
+                Right res-> Right res
+                Left (_, err) -> Left err
+        case runPureEff $ runError $ runReader m $ evaluate (ExprLambda tag pats expr) of
+            Right v' -> Right v'
+            Left (_, err) -> Left err
 evaluate (ExprLiteral _ lit) = return $ litValue lit
 evaluate (ExprTuple _ exprs) = do
     values <- mapM evaluate exprs
@@ -146,7 +156,6 @@ extractGADT (AST.GADT _ (TypeIdentifier typeName) constructors) = foldMap extrac
             (TypeSimple _ (TypeIdentifier "String"), VString _) -> return v
             (TypeSimple _ _, VConstructed _ _) -> return v -- BUG: assumes the costructor constructs the right type
             (TypeTuple _ ts, VTuple vs) | length ts == length vs -> return v
-            (TypeArrow{}, VLambda _) -> return v -- INFO: can't determine the type of a value function, this is what a type checker is for
             (TypeArrow{}, VFunction _) -> return v -- INFO: can't determine the type of a value function, this is what a type checker is for
             (TypeHole _, _) -> return v -- NOTE: IG a hole is any type???
             _ -> Left IEBadArgumentToConstructor

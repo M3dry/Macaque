@@ -15,5 +15,6 @@ stringify _ = "value"
 
 main : _
 main =
-  let f = (\x -> "100")
-    in stringify (Just (100, ()))
+  let g = (\x -> "g")
+      f = (\x -> g "100")
+    in f 200

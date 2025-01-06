@@ -26,7 +26,6 @@ data ValueInfo
     | VString T.Text
     | VConstructed T.Text [ValueInfo]
     | VTuple [ValueInfo]
-    | VLambda (ValueInfo -> Interpreter ValueInfo)
     | VFunction (ValueInfo -> Either InterpreterError ValueInfo)
 
 instance Show ValueInfo where
@@ -36,7 +35,6 @@ instance Show ValueInfo where
     show (VString txt) = "VSTring " <> show txt
     show (VConstructed name vs) = "VConstructed " <> show name <> show vs
     show (VTuple vs) = "VTuple " <> show vs
-    show (VLambda _) = "VLambda"
     show (VFunction _) = "VFunction"
 
 showValue :: ValueInfo -> String
@@ -46,7 +44,6 @@ showValue (VChar ch) = show ch
 showValue (VString str) = show str
 showValue (VConstructed name fields) = T.unpack name <> " " <> join " " (map showValue fields)
 showValue (VTuple vs) = "(" <> join ", " (map showValue vs) <> ")"
-showValue (VLambda _) = "lambda"
 showValue (VFunction _) = "function"
 
 join :: String -> [String] -> String

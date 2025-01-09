@@ -14,11 +14,17 @@ import NaiveEvaluator (extractGADT, makeFun, run, run')
 import NaiveEvaluator.AST (showValue)
 import Parser
 import Parser.Util (testParser)
+import AST (Function(..), Identifier (..), FunctionVariant (..))
+import Static (symbolsInScopeExpr, symbolsInScopeFunction)
 import Text.Pretty.Simple (pPrint)
 
 main :: IO ()
 main = do
     (gadts, funs) <- testParser testP
+
+    let x = map (\f@(Function _ (Identifier name) _ _) -> (name, symbolsInScopeFunction f)) funs
+    pPrint x
+
     let gadts' = foldMap extractGADT gadts
     let funs' = mapMaybe makeFun funs
     guard (length funs' == length funs)

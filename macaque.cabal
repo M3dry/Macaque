@@ -45,6 +45,7 @@ executable macaque
         , Parser
         , Parser.AST
         , Parser.Util
+        , Static
         , NaiveEvaluator
         , NaiveEvaluator.AST
     build-depends:

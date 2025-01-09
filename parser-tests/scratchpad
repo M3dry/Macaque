@@ -14,7 +14,4 @@ stringify Nothing = "Nothing"
 stringify _ = "value"
 
 main : _
-main =
-  let g = (\x -> "g")
-      f = (\x -> g "100")
-    in f 200
+main = stringify (Just 100)

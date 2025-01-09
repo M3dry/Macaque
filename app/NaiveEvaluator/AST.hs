@@ -1,15 +1,16 @@
 {-# LANGUAGE DataKinds #-}
 
-module NaiveEvaluator.AST (InterpreterError (..), Interpreter, ValueInfo (..), showValue) where
+module NaiveEvaluator.AST (InterpreterError (..), IError, Interpreter, ValueInfo (..), showValue) where
 
 import Data.Map qualified as M
 import Data.Text qualified as T
 import Effectful (Eff)
 import Effectful.Error.Static (Error)
 import Effectful.Reader.Static (Reader)
+import Text.Megaparsec (SourcePos)
 
 data InterpreterError
-    = IEVariableNotDefined
+    = IEVariableNotDefined T.Text
     | IENotAFunction
     | IEBadPattern
     | IENoMatch
@@ -17,7 +18,9 @@ data InterpreterError
     | IEBadArgumentToConstructor
     deriving (Show)
 
-type Interpreter a = Eff '[Reader (M.Map T.Text ValueInfo), Error InterpreterError] a
+type IError = (SourcePos, InterpreterError)
+
+type Interpreter a = Eff '[Reader (M.Map T.Text ValueInfo), Error IError] a
 
 data ValueInfo
     = VUnit
@@ -26,7 +29,7 @@ data ValueInfo
     | VString T.Text
     | VConstructed T.Text [ValueInfo]
     | VTuple [ValueInfo]
-    | VFunction (ValueInfo -> Either InterpreterError ValueInfo)
+    | VFunction (ValueInfo -> Either IError ValueInfo)
 
 instance Show ValueInfo where
     show VUnit = "VUnit"

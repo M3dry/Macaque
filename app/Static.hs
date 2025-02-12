@@ -1,3 +1,5 @@
+{-# LANGUAGE PatternSynonyms #-}
+
 module Static (symbolsInScopeFunction, symbolsInScopeExpr) where
 
 import AST
@@ -6,6 +8,7 @@ import Data.Functor.Foldable (cata)
 import Data.Set qualified as S
 import Data.Text qualified as T
 import Parser.AST (Parsing)
+import Static.AST (Typed, pattern TAny)
 
 symbolsInScopeFunction :: Function Parsing -> S.Set T.Text
 symbolsInScopeFunction (Function _ (Identifier name) _ variants) = S.delete name $ S.unions $ map symbolsInScopeFunctionVariant variants
@@ -39,3 +42,17 @@ symbolsFromPattern = cata alg
     alg (PatLiteralF _ _) = S.empty
     alg (PatTupleF _ pats) = S.unions pats
     alg (PatIgnoreF _) = S.empty
+
+annotate :: Expression Parsing -> Expression Typed
+annotate = cata alg
+  where
+    alg (ExprVarF p iden) = ExprVar (TAny, p) iden
+    alg (ExprTypeConstructorF p (TypeIdentifier typeIden)) = undefined
+    alg (ExprAppliedF p f arg) = undefined
+    alg (ExprTypedF p expr _) = undefined
+    alg (ExprLetF p idens body) = undefined
+    alg (ExprIfElseF p cond trueBranch falseBranch) = undefined
+    alg (ExprCaseF p match branches) = undefined
+    alg (ExprLambdaF p pats body) = undefined
+    alg (ExprLiteralF p _) = undefined
+    alg (ExprTupleF p exprs) = undefined

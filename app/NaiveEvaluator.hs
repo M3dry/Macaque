@@ -157,7 +157,6 @@ extractGADT (AST.GADT _ (TypeIdentifier typeName) constructors) = foldMap extrac
             (TypeSimple _ _, VConstructed _ _) -> return v -- BUG: assumes the costructor constructs the right type
             (TypeTuple _ ts, VTuple vs) | length ts == length vs -> return v
             (TypeArrow{}, VFunction _) -> return v -- INFO: can't determine the type of a value function, this is what a type checker is for
-            (TypeHole _, _) -> return v -- NOTE: IG a hole is any type???
             _ -> Left (extractTag arg, IEBadArgumentToConstructor)
         return $ fromType name ret (arg' : passedDown)
     fromType name (TypeSimple _ (TypeIdentifier typeName')) vs

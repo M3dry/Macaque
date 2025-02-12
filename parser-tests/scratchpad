@@ -3,15 +3,16 @@ data Bool where
   True : Bool
 
 data Maybe where
-    Just : _ -> Maybe
+    Just : String -> Maybe
     Nothing : Maybe
 
-stringify : _ -> String
+stringify : String -> String
 stringify () = "unit"
 stringify (x, y) = (stringify x, stringify y)
 stringify (Just x) = Just (stringify x)
 stringify Nothing = "Nothing"
-stringify _ = "value"
+stringify String = "value"
+stringify x = x
 
-main : _
-main = stringify (Just 100)
+main : String
+main = stringify (Just "str")

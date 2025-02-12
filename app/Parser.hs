@@ -9,7 +9,7 @@ module Parser where
 import AST qualified
 import Control.Applicative hiding (many, some)
 import Control.Applicative.Combinators (between, many, some, someTill)
-import Control.Monad (void, guard)
+import Control.Monad (guard, void)
 import Data.List.NonEmpty (NonEmpty ((:|)))
 import Data.Set qualified as S
 import Data.Text qualified as T
@@ -55,8 +55,7 @@ typeP inParens =
             else pure Nothing
   where
     typeP' =
-        AST.TypeHole <$> pos <* lexeme (char '_')
-            <|> (AST.TypeSimple <$> pos <*> typeIdentifierP)
+        (AST.TypeSimple <$> pos <*> typeIdentifierP)
             <|> try
                 ( withLineFold
                     ( do

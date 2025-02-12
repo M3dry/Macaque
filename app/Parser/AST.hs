@@ -10,7 +10,6 @@ data Parsing
 type instance TypeArrow Parsing = SourcePos
 type instance TypeTuple Parsing = SourcePos
 type instance TypeSimple Parsing = SourcePos
-type instance TypeHole Parsing = SourcePos
 type instance TypeUnit Parsing = SourcePos
 
 type instance LitNumber Parsing = SourcePos

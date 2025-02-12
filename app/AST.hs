@@ -46,15 +46,13 @@ data Type tag
     = TypeArrow (TypeArrow tag) (Type tag) (Type tag)
     | TypeTuple (TypeTuple tag) [Type tag]
     | TypeSimple (TypeSimple tag) TypeIdentifier
-    | TypeHole (TypeHole tag)
     | TypeUnit (TypeUnit tag)
 
 type family TypeArrow tag
 type family TypeTuple tag
 type family TypeSimple tag
-type family TypeHole tag
 type family TypeUnit tag
-type instance AllTags (Type tag) = '[TypeArrow tag, TypeTuple tag, TypeSimple tag, TypeHole tag, TypeUnit tag]
+type instance AllTags (Type tag) = '[TypeArrow tag, TypeTuple tag, TypeSimple tag, TypeUnit tag]
 
 makeBaseFunctor ''Type
 
@@ -64,7 +62,6 @@ instance Extract Type where
     extractTag (TypeArrow tag _ _) = tag
     extractTag (TypeTuple tag _) = tag
     extractTag (TypeSimple tag _) = tag
-    extractTag (TypeHole tag) = tag
     extractTag (TypeUnit tag) = tag
 
 data Sign = Positive | Negative
@@ -210,7 +207,6 @@ mkConstructor typeName constructorName tag signature
     checkSignature (TypeArrow _ _ t) = checkSignature t
     checkSignature (TypeTuple _ _) = False
     checkSignature (TypeSimple _ typeIden) = typeIden == typeName
-    checkSignature (TypeHole _) = True -- TODO: ehhh what do I want to do here???????
     checkSignature (TypeUnit _) = False
 
 data Function tag = Function (Functiontag tag) Identifier (Type tag) [FunctionVariant tag]

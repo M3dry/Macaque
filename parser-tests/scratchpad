@@ -1,18 +1,4 @@
-data Bool where
-  False : Bool
-  True : Bool
-
-data Maybe where
-    Just : String -> Maybe
-    Nothing : Maybe
-
-stringify : String -> String
-stringify () = "unit"
-stringify (x, y) = (stringify x, stringify y)
-stringify (Just x) = Just (stringify x)
-stringify Nothing = "Nothing"
-stringify String = "value"
-stringify x = x
-
-main : String
-main = stringify (Just "str")
+expr
+ add
+ 100
+ 200

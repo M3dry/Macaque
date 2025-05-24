@@ -173,6 +173,7 @@ expressionP = typed >>= application
                 )
             <|> try (AST.ExprLiteral <$> pos <*> lexeme literalP)
             <|> between (lexeme' (char '(')) (lexeme (char ')')) expressionP
+            <|> (P.T.ExprLiteral <$> lexeme literalP)
     letP = withLineFold $ do
         p <- pos
         keyword' "let"

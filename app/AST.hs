@@ -30,8 +30,11 @@ type family ApplyConstraint2 (xs :: [K.Type]) (ys :: [K.Type]) (c :: K.Type -> K
     ApplyConstraint2 (x ': xs) (y ': ys) c = (c x y, ApplyConstraint2 xs ys c)
     ApplyConstraint2 '[] '[] _ = ()
 
+type family ExtractReturn f
+
+type instance ExtractReturn f = TypeOfFirst (AllTags f)
 class Extract f where
-    extractTag :: (AllEq (f tag)) => f tag -> TypeOfFirst (AllTags (f tag))
+    extractTag :: (AllEq f) => f -> ExtractReturn f
 
 newtype Identifier = Identifier Text
     deriving (Show, Eq, Ord)
@@ -47,18 +50,22 @@ data Type tag
     | TypeTuple (TypeTuple tag) [Type tag]
     | TypeSimple (TypeSimple tag) TypeIdentifier
     | TypeUnit (TypeUnit tag)
+    | TypeOther (TypeOther tag)
 
 type family TypeArrow tag
 type family TypeTuple tag
 type family TypeSimple tag
 type family TypeUnit tag
+
 type instance AllTags (Type tag) = '[TypeArrow tag, TypeTuple tag, TypeSimple tag, TypeUnit tag]
+
+type family TypeOther tag
 
 makeBaseFunctor ''Type
 
-deriving instance (ApplyConstraint (AllTags (Type tag)) Show) => Show (Type tag)
+deriving instance (ApplyConstraint (AllTags (Type tag)) Show, Show (TypeOther tag)) => Show (Type tag)
 
-instance Extract Type where
+instance (Extract (TypeOther tag)) => Extract (Type tag) where
     extractTag (TypeArrow tag _ _) = tag
     extractTag (TypeTuple tag _) = tag
     extractTag (TypeSimple tag _) = tag
@@ -81,7 +88,7 @@ type instance AllTags (Literal tag) = '[LitNumber tag, LitString tag, LitChar ta
 
 deriving instance (ApplyConstraint (AllTags (Literal tag)) Show) => Show (Literal tag)
 
-instance Extract Literal where
+instance Extract (Literal tag) where
     extractTag (LitNumber tag _ _) = tag
     extractTag (LitString tag _) = tag
     extractTag (LitChar tag _) = tag
@@ -115,7 +122,7 @@ makeBaseFunctor ''Pattern
 
 deriving instance (ApplyConstraint (AllTags (Pattern tag)) Show, Show (Literal tag)) => Show (Pattern tag)
 
-instance Extract Pattern where
+instance Extract (Pattern tag) where
     extractTag (PatVariable tag _) = tag
     extractTag (PatCapture tag _ _) = tag
     extractTag (PatConstructor tag _ _) = tag
@@ -169,7 +176,7 @@ deriving instance
     ) =>
     Show (Expression tag)
 
-instance Extract Expression where
+instance Extract (Expression tag) where
     extractTag (ExprVar tag _) = tag
     extractTag (ExprTypeConstructor tag _) = tag
     extractTag (ExprApplied tag _ _) = tag
